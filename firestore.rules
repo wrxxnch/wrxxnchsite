@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner() {
+      return isAuthenticated() && request.auth.token.email == 'jeanpierreowner@gmail.com';
+    }
+    
+    function isAdmin() {
+      return isOwner() || (
+        isAuthenticated() && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email))
+      );
+    }
+
+    // Admins collection
+    match /admins/{adminEmail} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner() || isAdmin();
+    }
+
+    // Posts collection
+    match /posts/{postId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Splashes collection
+    match /splashes/{splashId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Site settings & theme customization
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Wallpapers collection
+    match /wallpapers/{wallpaperId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

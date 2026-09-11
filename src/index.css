@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --dedsec-primary: #00f0ff;
+    --dedsec-secondary: #00ff66;
+    --dedsec-accent: #ff0055;
+    --dedsec-bg: #06090e;
+    --dedsec-surface: #0c121c;
+    --dedsec-border: #1a283a;
+  }
+
+  body {
+    background-color: var(--dedsec-bg);
+    color: #e2e8f0;
+    font-family: 'Share Tech Mono', monospace;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Chakra Petch', sans-serif;
+  }
+}
+
+/* Custom Scanlines and CRT Grid */
+.crt-scanlines {
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.35) 50%
+  ), linear-gradient(
+    90deg,
+    rgba(255, 0, 0, 0.03),
+    rgba(0, 255, 0, 0.01),
+    rgba(0, 0, 255, 0.03)
+  );
+  background-size: 100% 3px, 6px 100%;
+  pointer-events: none;
+}
+
+/* DedSec Cyber Matrix Grid */
+.cyber-grid {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(0, 240, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 240, 255, 0.04) 1px, transparent 1px);
+}
+
+/* Glitch animation text */
+@keyframes glitch-anim {
+  0% {
+    transform: translate(0);
+    text-shadow: -2px 0 var(--dedsec-accent), 2px 0 var(--dedsec-primary);
+  }
+  20% {
+    transform: translate(-2px, 1px);
+    text-shadow: 2px 0 var(--dedsec-accent), -2px 0 var(--dedsec-primary);
+  }
+  40% {
+    transform: translate(-1px, -1px);
+    text-shadow: -1px 0 var(--dedsec-secondary), 1px 0 var(--dedsec-accent);
+  }
+  60% {
+    transform: translate(2px, 1px);
+    text-shadow: 2px 0 var(--dedsec-primary), -2px 0 var(--dedsec-accent);
+  }
+  80% {
+    transform: translate(1px, -1px);
+    text-shadow: -2px 0 var(--dedsec-accent), 2px 0 var(--dedsec-secondary);
+  }
+  100% {
+    transform: translate(0);
+    text-shadow: -2px 0 var(--dedsec-accent), 2px 0 var(--dedsec-primary);
+  }
+}
+
+.glitch-text:hover, .glitch-active {
+  animation: glitch-anim 0.4s infinite;
+}
+
+/* Terminal scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #06090e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--dedsec-primary);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--dedsec-secondary);
+}
+
+/* Corner Cut Cyber Shape */
+.clip-cyber-corner {
+  clip-path: polygon(
+    0 0,
+    calc(100% - 14px) 0,
+    100% 14px,
+    100% 100%,
+    14px 100%,
+    0 calc(100% - 14px)
+  );
+}
+
+.clip-cyber-badge {
+  clip-path: polygon(
+    8px 0,
+    100% 0,
+    calc(100% - 8px) 100%,
+    0 100%
+  );
+}

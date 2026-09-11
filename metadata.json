@@ -1,0 +1,6 @@
+{
+  "name": "DedSec Network // Watch Dogs 2",
+  "description": "Site pessoal no estilo DedSec Watch Dogs 2 para publicações com autenticação Google Firebase, painel administrativo, wallpapers e splashes dinâmicos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
