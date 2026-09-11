@@ -18,6 +18,15 @@ interface NavbarProps {
   onLogout: () => void;
   postCount: number;
   logoUrl?: string;
+  logoHue?: number;
+  logoSaturation?: number;
+  logoBrightness?: number;
+  logoInvert?: boolean;
+  logoFrameBg?: string;
+  logoFrameBorderColor?: string;
+  logoFrameGlow?: boolean;
+  logoFrameEnabled?: boolean;
+  logoSize?: number;
   siteTitle?: string;
 }
 
@@ -34,6 +43,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
   postCount,
   logoUrl,
+  logoHue = 0,
+  logoSaturation = 100,
+  logoBrightness = 100,
+  logoInvert = false,
+  logoFrameBg = '#000000',
+  logoFrameBorderColor = 'var(--dedsec-primary)',
+  logoFrameGlow = true,
+  logoFrameEnabled = true,
+  logoSize = 36,
   siteTitle
 }) => {
   const [timeStr, setTimeStr] = useState('');
@@ -53,6 +71,10 @@ export const Navbar: React.FC<NavbarProps> = ({
     return () => clearInterval(interval);
   }, []);
 
+  const logoFilter = `hue-rotate(${logoHue}deg) saturate(${logoSaturation}%) brightness(${logoBrightness}%) ${logoInvert ? 'invert(100%)' : 'invert(0%)'}`;
+  const frameBorder = logoFrameBorderColor || 'var(--dedsec-primary)';
+  const frameBg = logoFrameBg || '#000000';
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-[var(--dedsec-border)] bg-[var(--dedsec-bg)]/90 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
@@ -61,18 +83,54 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-3">
           <div 
             onClick={() => playCyberSound('click', soundEnabled)}
-            className="relative p-1.5 bg-black border border-[var(--dedsec-primary)] clip-cyber-badge flex items-center justify-center text-[var(--dedsec-primary)] hover:text-[var(--dedsec-accent)] transition-colors min-w-[38px] min-h-[38px] cursor-pointer"
-            title="DedSec Network Node"
+            className={`relative flex items-center justify-center transition-all cursor-pointer ${
+              logoFrameEnabled 
+                ? 'p-1.5 clip-cyber-badge border overflow-hidden' 
+                : 'p-0.5 bg-transparent border-0'
+            }`}
+            style={{
+              background: logoFrameEnabled ? frameBg : 'transparent',
+              borderColor: logoFrameEnabled ? frameBorder : 'transparent',
+              boxShadow: (logoFrameEnabled && logoFrameGlow)
+                ? `0 0 10px ${frameBorder}80, inset 0 0 8px ${frameBorder}30` 
+                : 'none',
+              minWidth: logoFrameEnabled ? `${Math.max(logoSize + 10, 36)}px` : `${logoSize}px`,
+              minHeight: logoFrameEnabled ? `${Math.max(logoSize + 10, 36)}px` : `${logoSize}px`
+            }}
+            title={logoFrameEnabled ? "DedSec Network Node // Lâmina de Identidade" : "DedSec Network Node // Logo"}
           >
             {logoUrl && !logoLoadError ? (
               <img
                 src={logoUrl}
                 alt="DedSec Logo"
-                className="w-7 h-7 object-contain drop-shadow-[0_0_8px_var(--dedsec-primary)]"
+                className="object-contain transition-all"
+                style={{
+                  width: `${logoSize}px`,
+                  height: `${logoSize}px`,
+                  filter: `${logoFilter} drop-shadow(0 0 4px ${frameBorder})`
+                }}
                 onError={() => setLogoLoadError(true)}
               />
             ) : (
-              <DedsecSkullIcon className="w-6 h-6" />
+              <div 
+                style={{ 
+                  filter: logoFilter,
+                  width: `${logoSize}px`,
+                  height: `${logoSize}px`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <DedsecSkullIcon 
+                  className="transition-colors" 
+                  style={{ 
+                    color: frameBorder,
+                    width: `${Math.max(logoSize - 4, 18)}px`,
+                    height: `${Math.max(logoSize - 4, 18)}px`
+                  }}
+                />
+              </div>
             )}
           </div>
           <div>

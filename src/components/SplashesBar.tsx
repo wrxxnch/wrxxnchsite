@@ -115,7 +115,7 @@ export const SplashesBar: React.FC<SplashesBarProps> = ({
 
                   <div>
                     <p className="text-sm font-display font-medium text-gray-200 group-hover:text-white transition-colors">
-                      {item.text}
+                      {item.text && item.text.trim() ? item.text : (item.asciiArt ? '[TRANSMISSÃO DE ARTE ASCII DEDSEC]' : '[SPLASH SEM TEXTO]')}
                     </p>
                     <div className="flex items-center gap-2 mt-1 text-[10px] font-mono text-gray-400">
                       <span>{item.date || 'DATA_SEC'}</span>

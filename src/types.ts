@@ -51,6 +51,15 @@ export interface SiteSettings {
   tickerRawText: string;
   customCategories?: string[];
   logoUrl?: string;
+  logoHue?: number;
+  logoSaturation?: number;
+  logoBrightness?: number;
+  logoInvert?: boolean;
+  logoFrameBg?: string;
+  logoFrameBorderColor?: string;
+  logoFrameGlow?: boolean;
+  logoFrameEnabled?: boolean;
+  logoSize?: number;
 }
 
 export interface WallpaperPreset {

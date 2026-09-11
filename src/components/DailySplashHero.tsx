@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Radio, Sparkles, Play, Maximize2, Video, Image as ImageIcon, Terminal, Copy, Check } from 'lucide-react';
+import { Radio, Sparkles, Video, Image as ImageIcon, Terminal, Copy, Check, Shuffle, RotateCcw, Maximize2, Play } from 'lucide-react';
 import { SplashItem } from '../types';
 import { getEmbedVideoUrl, isDirectVideoUrl } from '../utils/media';
 import { playCyberSound } from '../utils/audio';
@@ -7,6 +7,7 @@ import { playCyberSound } from '../utils/audio';
 interface DailySplashHeroProps {
   dailySplash: SplashItem | null;
   highlightedSplash: SplashItem | null;
+  splashes?: SplashItem[];
   soundEnabled: boolean;
   onOpenMediaModal: (url: string, type: 'image' | 'video', title?: string) => void;
   isAdmin: boolean;
@@ -16,18 +17,23 @@ interface DailySplashHeroProps {
 export const DailySplashHero: React.FC<DailySplashHeroProps> = ({
   dailySplash,
   highlightedSplash,
+  splashes = [],
   soundEnabled,
   onOpenMediaModal,
   isAdmin,
   onOpenAdminPanel
 }) => {
-  const [isPlayingVideo, setIsPlayingVideo] = useState(false);
   const [copiedAscii, setCopiedAscii] = useState(false);
+  const [adminRandomSplashIndex, setAdminRandomSplashIndex] = useState<number | null>(null);
 
-  // Use either the highlighted splash with media or the daily splash
-  const activeSplash = dailySplash || highlightedSplash;
-  const mediaUrl = activeSplash?.mediaUrl || highlightedSplash?.mediaUrl;
-  const mediaType = activeSplash?.mediaType || highlightedSplash?.mediaType || (mediaUrl ? 'image' : 'none');
+  // Determine active splash: admin override random splash > daily splash > highlighted splash > first available splash
+  const isRandomActive = adminRandomSplashIndex !== null && splashes && splashes.length > 0 && adminRandomSplashIndex < splashes.length;
+  const activeSplash = isRandomActive 
+    ? splashes[adminRandomSplashIndex!] 
+    : (dailySplash || highlightedSplash || (splashes.length > 0 ? splashes[0] : null));
+
+  const mediaUrl = activeSplash?.mediaUrl;
+  const mediaType = activeSplash?.mediaType || (mediaUrl ? 'image' : 'none');
 
   const { isYoutube, embedUrl } = getEmbedVideoUrl(mediaUrl);
   const isDirectVideo = isDirectVideoUrl(mediaUrl);
@@ -38,6 +44,28 @@ export const DailySplashHero: React.FC<DailySplashHeroProps> = ({
     playCyberSound('terminal', soundEnabled);
     setCopiedAscii(true);
     setTimeout(() => setCopiedAscii(false), 2500);
+  };
+
+  const handleNextRandomSplash = () => {
+    if (!splashes || splashes.length === 0) return;
+    playCyberSound('glitch', soundEnabled);
+
+    if (splashes.length === 1) {
+      setAdminRandomSplashIndex(0);
+      return;
+    }
+
+    // Pick a random index different from current
+    let nextIdx = Math.floor(Math.random() * splashes.length);
+    if (adminRandomSplashIndex !== null && nextIdx === adminRandomSplashIndex) {
+      nextIdx = (nextIdx + 1) % splashes.length;
+    }
+    setAdminRandomSplashIndex(nextIdx);
+  };
+
+  const handleResetToDaily = () => {
+    playCyberSound('click', soundEnabled);
+    setAdminRandomSplashIndex(null);
   };
 
   return (
@@ -51,59 +79,105 @@ export const DailySplashHero: React.FC<DailySplashHeroProps> = ({
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
         
         {/* Left: Broadcast Text & Meta */}
-        <div className="flex-1 space-y-3">
+        <div className="flex-1 space-y-3 w-full">
           
-          {/* Status Bar */}
-          <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
-            <span className="flex items-center gap-1.5 px-2 py-0.5 bg-[var(--dedsec-accent)]/20 border border-[var(--dedsec-accent)] text-[var(--dedsec-accent)] font-bold">
-              <Radio className="w-3.5 h-3.5 animate-pulse" />
-              <span>SPLASH RELEVANTE DO DIA</span>
-            </span>
-
-            {activeSplash?.date && (
-              <span className="px-2 py-0.5 bg-black/60 border border-gray-700 text-gray-300">
-                DATE: {activeSplash.date}
+          {/* Status Bar with Admin Next Random Splash Controls */}
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex items-center gap-1.5 px-2 py-0.5 bg-[var(--dedsec-accent)]/20 border border-[var(--dedsec-accent)] text-[var(--dedsec-accent)] font-bold">
+                <Radio className="w-3.5 h-3.5 animate-pulse" />
+                <span>{isRandomActive ? 'TESTE ADMIN // SPLASH SORTEADO' : 'SPLASH RELEVANTE DO DIA'}</span>
               </span>
-            )}
 
-            {mediaUrl && (
-              <span className="flex items-center gap-1 px-2 py-0.5 bg-[var(--dedsec-primary)]/10 border border-[var(--dedsec-primary)] text-[var(--dedsec-primary)]">
-                {mediaType === 'video' ? <Video className="w-3 h-3" /> : <ImageIcon className="w-3 h-3" />}
-                <span>MÍDIA EM DESTAQUE NA PÁGINA</span>
-              </span>
+              {activeSplash?.date && (
+                <span className="px-2 py-0.5 bg-black/60 border border-gray-700 text-gray-300">
+                  DATE: {activeSplash.date}
+                </span>
+              )}
+
+              {mediaUrl && (
+                <span className="flex items-center gap-1 px-2 py-0.5 bg-[var(--dedsec-primary)]/10 border border-[var(--dedsec-primary)] text-[var(--dedsec-primary)]">
+                  {mediaType === 'video' ? <Video className="w-3 h-3" /> : <ImageIcon className="w-3 h-3" />}
+                  <span>MÍDIA EM DESTAQUE NA PÁGINA</span>
+                </span>
+              )}
+            </div>
+
+            {/* Admin Random Splash Button */}
+            {isAdmin && splashes && splashes.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleNextRandomSplash}
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-black/80 hover:bg-[var(--dedsec-primary)] hover:text-black text-[var(--dedsec-primary)] border border-[var(--dedsec-primary)] font-mono text-xs font-bold transition-all clip-cyber-badge cursor-pointer shadow-[0_0_10px_rgba(0,240,255,0.2)]"
+                  title="Sortear e visualizar o próximo splash aleatório cadastrado"
+                >
+                  <Shuffle className="w-3 h-3" />
+                  <span>PRÓXIMO SPLASH ALEATÓRIO ({splashes.length})</span>
+                </button>
+
+                {isRandomActive && (
+                  <button
+                    type="button"
+                    onClick={handleResetToDaily}
+                    className="flex items-center gap-1 px-2 py-1 bg-black/60 hover:bg-gray-800 text-gray-400 hover:text-white border border-gray-700 text-xs font-mono transition-colors cursor-pointer"
+                    title="Voltar ao splash original do dia"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>VOLTAR AO DO DIA</span>
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
-          {/* Main Splash Text */}
+          {/* Main Splash Content: Text and/or ASCII Art */}
           {activeSplash ? (
-            <div className="space-y-3">
-              <p className="font-display font-bold text-lg sm:text-xl md:text-2xl text-white tracking-wide leading-snug">
-                &ldquo;{activeSplash.text}&rdquo;
-              </p>
+            <div className="space-y-3 pt-1">
+              
+              {/* Text is only rendered if provided; not mandatory when ASCII is present */}
+              {activeSplash.text && activeSplash.text.trim() && (
+                <p className="font-display font-bold text-lg sm:text-xl md:text-2xl text-white tracking-wide leading-snug">
+                  &ldquo;{activeSplash.text.trim()}&rdquo;
+                </p>
+              )}
+
               <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
                 <span className="text-[var(--dedsec-secondary)]">#</span>
-                <span>TRANSMISSÃO CRIPTOGRAFADA DEDSEC // CANAL 01</span>
+                <span>
+                  {activeSplash.asciiArt && !activeSplash.text?.trim()
+                    ? 'TRANSMISSÃO VISUAL ASCII DEDSEC // CANAL 01'
+                    : 'TRANSMISSÃO CRIPTOGRAFADA DEDSEC // CANAL 01'}
+                </span>
+                {activeSplash.type && (
+                  <span className="px-1.5 py-0.5 bg-black/70 border border-gray-800 text-[10px] uppercase text-gray-400">
+                    MODO: {activeSplash.type}
+                  </span>
+                )}
               </div>
 
-              {/* Arte ASCII Copiável no Splash */}
-              {activeSplash.asciiArt && (
-                <div className="mt-3 p-3 bg-black/90 border border-[var(--dedsec-primary)]/50 clip-cyber-corner space-y-2 group shadow-[0_0_15px_rgba(0,240,255,0.15)]">
-                  <div className="flex items-center justify-between border-b border-gray-800 pb-1.5">
+              {/* Arte ASCII no Splash - Aparece aqui com destaque supremo e botão de cópia */}
+              {activeSplash.asciiArt && activeSplash.asciiArt.trim() && (
+                <div className="mt-2 p-3.5 bg-black/95 border-2 border-[var(--dedsec-primary)]/70 clip-cyber-corner space-y-2.5 group shadow-[0_0_20px_rgba(0,240,255,0.2)]">
+                  <div className="flex flex-wrap items-center justify-between border-b border-gray-800 pb-2 gap-2">
                     <div className="flex items-center gap-2 text-xs font-mono text-[var(--dedsec-primary)]">
-                      <Terminal className="w-3.5 h-3.5 animate-pulse text-[var(--dedsec-primary)]" />
-                      <span className="font-bold tracking-wider">ARTE ASCII DEDSEC [COPIÁVEL]</span>
+                      <Terminal className="w-4 h-4 animate-pulse text-[var(--dedsec-primary)]" />
+                      <span className="font-bold tracking-wider">TERMINAL VISUAL // ARTE ASCII DEDSEC</span>
+                      <span className="text-[10px] text-gray-500 font-mono hidden sm:inline">
+                        [{activeSplash.asciiArt.split('\n').length} linhas]
+                      </span>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => handleCopyAscii(activeSplash.asciiArt!)}
-                      className="flex items-center gap-1.5 px-3 py-1 text-xs font-mono font-bold bg-[var(--dedsec-primary)] text-black hover:bg-cyan-300 transition-colors clip-cyber-badge cursor-pointer"
-                      title="Copiar arte ASCII para a área de transferência"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold bg-[var(--dedsec-primary)] text-black hover:bg-cyan-300 transition-all clip-cyber-badge cursor-pointer shadow-[0_0_12px_rgba(0,240,255,0.4)]"
+                      title="Copiar arte ASCII completa para a área de transferência"
                     >
                       {copiedAscii ? (
                         <>
                           <Check className="w-3.5 h-3.5" />
-                          <span>COPIADO!</span>
+                          <span>ARTE COPIADA COM SUCESSO!</span>
                         </>
                       ) : (
                         <>
@@ -114,7 +188,8 @@ export const DailySplashHero: React.FC<DailySplashHeroProps> = ({
                     </button>
                   </div>
 
-                  <pre className="font-mono text-[11px] sm:text-xs text-[var(--dedsec-primary)] leading-tight overflow-x-auto p-2.5 bg-black/80 border border-gray-800/80 select-all hover:border-[var(--dedsec-primary)]/40 transition-colors font-bold whitespace-pre">
+                  {/* Visualização limpa da arte ASCII */}
+                  <pre className="font-mono text-[10px] sm:text-xs text-[var(--dedsec-primary)] leading-tight overflow-x-auto p-3 bg-black/90 border border-gray-800/90 select-all hover:border-[var(--dedsec-primary)]/60 transition-colors font-bold whitespace-pre block max-h-72">
                     {activeSplash.asciiArt}
                   </pre>
                 </div>
@@ -134,7 +209,7 @@ export const DailySplashHero: React.FC<DailySplashHeroProps> = ({
                   className="text-xs font-mono text-[var(--dedsec-primary)] hover:underline flex items-center gap-1"
                 >
                   <Sparkles className="w-3 h-3" />
-                  <span>Publicar Splash Relevante com Imagem ou Vídeo no Painel Admin →</span>
+                  <span>Publicar Splash Relevante com Imagem, Vídeo ou Arte ASCII no Painel Admin →</span>
                 </button>
               ) : (
                 <p className="text-xs font-mono text-gray-500">

@@ -216,6 +216,13 @@ export default function App() {
           onLogout={logoutUser}
           postCount={posts.length}
           logoUrl={settings.logoUrl}
+          logoHue={settings.logoHue}
+          logoSaturation={settings.logoSaturation}
+          logoBrightness={settings.logoBrightness}
+          logoInvert={settings.logoInvert}
+          logoFrameBg={settings.logoFrameBg}
+          logoFrameBorderColor={settings.logoFrameBorderColor}
+          logoFrameGlow={settings.logoFrameGlow}
           siteTitle={settings.siteTitle}
         />
 
@@ -258,6 +265,7 @@ export default function App() {
           <DailySplashHero
             dailySplash={dailySplash}
             highlightedSplash={highlightedSplash}
+            splashes={splashes}
             soundEnabled={soundEnabled}
             onOpenMediaModal={(url, type, title) => setActiveMedia({ url, type, title })}
             isAdmin={isAdmin}

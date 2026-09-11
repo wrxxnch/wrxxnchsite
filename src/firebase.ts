@@ -91,7 +91,17 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   enableSound: true,
   siteTitle: 'DEDSEC // SF_CELL',
   subTitle: 'ctOS 2.0 EXPOSED // WATCH DOGS NETWORK',
-  tickerRawText: 'DEDSEC HAS GIVEN YOU THE TRUTH. DO WHAT YOU WILL.\nctOS 2.0 REVERSE ENGAGED. PRIVACY IS AN ILLUSION.\nTRANSMISSION ONLINE: WELCOME AGENT.\nSAN FRANCISCO CELL MONITORING ALL TRAFFIC.'
+  tickerRawText: 'DEDSEC HAS GIVEN YOU THE TRUTH. DO WHAT YOU WILL.\nctOS 2.0 REVERSE ENGAGED. PRIVACY IS AN ILLUSION.\nTRANSMISSION ONLINE: WELCOME AGENT.\nSAN FRANCISCO CELL MONITORING ALL TRAFFIC.',
+  logoUrl: '',
+  logoHue: 0,
+  logoSaturation: 100,
+  logoBrightness: 100,
+  logoInvert: false,
+  logoFrameBg: '#000000',
+  logoFrameBorderColor: '#00f0ff',
+  logoFrameGlow: true,
+  logoFrameEnabled: true,
+  logoSize: 36
 };
 
 // Settings Firestore Listener

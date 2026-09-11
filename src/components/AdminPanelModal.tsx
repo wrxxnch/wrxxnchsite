@@ -22,7 +22,11 @@ import {
   ShieldAlert,
   Tag,
   ListFilter,
-  FolderPlus
+  FolderPlus,
+  Layers,
+  RotateCcw,
+  Sun,
+  Contrast
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { Post, AdminUser, SplashItem, SiteSettings } from '../types';
@@ -124,8 +128,23 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [tempWallpaperOpacity, setTempWallpaperOpacity] = useState(settings.wallpaperOpacity);
   const [tempWallpaperBlur, setTempWallpaperBlur] = useState(settings.wallpaperBlur);
   const [tempLogoUrl, setTempLogoUrl] = useState(settings.logoUrl || '');
+  const [tempLogoHue, setTempLogoHue] = useState(settings.logoHue ?? 0);
+  const [tempLogoSaturation, setTempLogoSaturation] = useState(settings.logoSaturation ?? 100);
+  const [tempLogoBrightness, setTempLogoBrightness] = useState(settings.logoBrightness ?? 100);
+  const [tempLogoInvert, setTempLogoInvert] = useState(settings.logoInvert ?? false);
+  const [tempLogoFrameBg, setTempLogoFrameBg] = useState(settings.logoFrameBg || '#000000');
+  const [tempLogoFrameBorderColor, setTempLogoFrameBorderColor] = useState(settings.logoFrameBorderColor || '#00f0ff');
+  const [tempLogoFrameGlow, setTempLogoFrameGlow] = useState(settings.logoFrameGlow ?? true);
   const [logoFileName, setLogoFileName] = useState('');
   const [customizationSaved, setCustomizationSaved] = useState(false);
+
+  const resetLogoHsb = () => {
+    setTempLogoHue(0);
+    setTempLogoSaturation(100);
+    setTempLogoBrightness(100);
+    setTempLogoInvert(false);
+    playCyberSound('click', soundEnabled);
+  };
 
   const handleLogoFileUpload = (file: File) => {
     if (!file) return;
@@ -172,6 +191,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Sync customization state with settings prop
   useEffect(() => {
     setTempLogoUrl(settings.logoUrl || '');
+    setTempLogoHue(settings.logoHue ?? 0);
+    setTempLogoSaturation(settings.logoSaturation ?? 100);
+    setTempLogoBrightness(settings.logoBrightness ?? 100);
+    setTempLogoInvert(settings.logoInvert ?? false);
+    setTempLogoFrameBg(settings.logoFrameBg || '#000000');
+    setTempLogoFrameBorderColor(settings.logoFrameBorderColor || '#00f0ff');
+    setTempLogoFrameGlow(settings.logoFrameGlow ?? true);
     setTempWallpaperUrl(settings.wallpaperUrl);
     setTempWallpaperOpacity(settings.wallpaperOpacity);
     setTempWallpaperBlur(settings.wallpaperBlur);
@@ -386,7 +412,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   // Handle Splash Submit (Individual)
   const handleSaveSplash = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!splashText.trim()) return;
+    if (!splashText.trim() && !splashAsciiArt.trim()) {
+      alert('Insira ao menos um texto ou uma arte ASCII para o splash.');
+      return;
+    }
 
     setIsSubmittingSplash(true);
     playCyberSound('terminal', soundEnabled);
@@ -405,6 +434,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         });
         setSplashSuccessMsg('Splash atualizado no Firestore!');
         setEditingSplashId(null);
+        setSplashText('');
+        setSplashMediaUrl('');
         setSplashAsciiArt('');
       } else {
         await createSplash({
@@ -475,6 +506,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         wallpaperOpacity: tempWallpaperOpacity,
         wallpaperBlur: tempWallpaperBlur,
         logoUrl: tempLogoUrl,
+        logoHue: tempLogoHue,
+        logoSaturation: tempLogoSaturation,
+        logoBrightness: tempLogoBrightness,
+        logoInvert: tempLogoInvert,
+        logoFrameBg: tempLogoFrameBg,
+        logoFrameBorderColor: tempLogoFrameBorderColor,
+        logoFrameGlow: tempLogoFrameGlow,
         tickerRawText: bulkSplashText
       };
 
@@ -1166,15 +1204,22 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-mono text-gray-300">
-                    TEXTO DO SPLASH *
-                  </label>
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <label className="text-gray-300 font-bold">
+                      TEXTO / FRASE DO SPLASH {splashAsciiArt.trim() ? '(OPCIONAL COM ARTE ASCII)' : '*'}
+                    </label>
+                    {splashAsciiArt.trim() && (
+                      <span className="text-[10px] text-[var(--dedsec-primary)]">
+                        ✓ Arte ASCII inserida: texto não obrigatório
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
-                    required
+                    required={!splashAsciiArt.trim()}
                     value={splashText}
                     onChange={(e) => setSplashText(e.target.value)}
-                    placeholder="Ex: ctOS 2.0 REVERSE ENGAGED. PRIVACY IS AN ILLUSION."
+                    placeholder={splashAsciiArt.trim() ? "Opcional: insira uma legenda ou deixe apenas a arte ASCII..." : "Ex: ctOS 2.0 REVERSE ENGAGED. PRIVACY IS AN ILLUSION."}
                     className="w-full px-3 py-2 bg-black border border-gray-700 text-white font-mono text-sm focus:border-[var(--dedsec-accent)] focus:outline-none"
                   />
                 </div>
@@ -1432,7 +1477,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                             }`}>
                               {s.type === 'daily' ? 'DO DIA' : 'COMUM'}
                             </span>
-                            <span className="text-gray-200 truncate">{s.text}</span>
+                            <span className="text-gray-200 truncate">
+                              {s.text && s.text.trim() ? s.text : (s.asciiArt ? '[TRANSMISSÃO DE ARTE ASCII]' : '[SPLASH SEM TEXTO]')}
+                            </span>
+                            {s.asciiArt && (
+                              <span className="px-1 py-0.5 bg-[var(--dedsec-primary)]/15 border border-[var(--dedsec-primary)] text-[var(--dedsec-primary)] text-[9px] font-bold">
+                                ASCII
+                              </span>
+                            )}
                           </div>
 
                           {s.mediaUrl && (
@@ -1626,79 +1678,475 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
               </div>
 
-              {/* LOGOTIPO DEDSEC DO SITE (UPLOAD DE ARQUIVO OU URL) */}
-              <div className="border border-gray-800 bg-black/60 p-4 clip-cyber-corner space-y-4">
-                <div className="flex items-center justify-between border-b border-gray-800 pb-2">
+              {/* LOGOTIPO DEDSEC DO SITE (UPLOAD DE ARQUIVO OU URL) COM HSB, LÂMINA E QUADRO */}
+              <div className="border border-gray-800 bg-black/60 p-4 clip-cyber-corner space-y-5">
+                <div className="flex flex-wrap items-center justify-between border-b border-gray-800 pb-2 gap-2">
                   <h3 className="font-display font-bold text-sm text-white flex items-center gap-2">
                     <ImageIcon className="w-4 h-4 text-[var(--dedsec-primary)]" />
-                    <span>LOGOTIPO DO SITE // IDENTIDADE DEDSEC</span>
+                    <span>LOGOTIPO DO SITE // IDENTIDADE, LÂMINA & HSB</span>
                   </h3>
-                  {tempLogoUrl && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={resetLogoHsb}
+                      className="text-xs font-mono text-gray-400 hover:text-[var(--dedsec-primary)] flex items-center gap-1 cursor-pointer"
+                      title="Resetar todos os filtros de cores da logo"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Resetar HSB</span>
+                    </button>
+                    {tempLogoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempLogoUrl('');
+                          setLogoFileName('');
+                          playCyberSound('click', soundEnabled);
+                        }}
+                        className="text-xs font-mono text-red-400 hover:underline cursor-pointer"
+                      >
+                        [Restaurar Logo Padrão]
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-xs font-mono text-gray-400 leading-relaxed">
+                  Defina o logotipo oficial da célula DedSec exibido na barra superior de navegação. Personalize os filtros de cores <strong className="text-white">HSB</strong> (Matiz, Saturação, Brilho, Inversão de cor), a <strong className="text-white">lâmina de fundo</strong> (placa base do quadro) e a <strong className="text-white">cor do contorno do quadro lâmina</strong> com efeito neon.
+                </p>
+
+                {/* Prévia Interativa da Lâmina do Logotipo */}
+                <div className="p-4 bg-black/90 border border-gray-800 clip-cyber-corner space-y-3">
+                  <div className="flex items-center justify-between border-b border-gray-800/80 pb-2">
+                    <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5">
+                      <Eye className="w-3.5 h-3.5 text-[var(--dedsec-primary)]" />
+                      PRÉVIA EM TEMPO REAL (COMO APARECE NA NAVBAR)
+                    </span>
+                    <span className="text-[10px] font-mono text-gray-400">
+                      {tempLogoUrl ? 'IMAGEM CARREGADA' : 'SKULL PADRÃO VETORIAL'}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-5 pt-1">
+                    {/* O Quadro / Lâmina da Logo */}
+                    <div className="flex flex-col items-center gap-1.5">
+                      <div 
+                        className="relative p-2.5 clip-cyber-badge flex items-center justify-center transition-all min-w-[56px] min-h-[56px] cursor-pointer overflow-hidden border"
+                        style={{
+                          background: tempLogoFrameBg || '#000000',
+                          borderColor: tempLogoFrameBorderColor || 'var(--dedsec-primary)',
+                          boxShadow: tempLogoFrameGlow 
+                            ? `0 0 16px ${(tempLogoFrameBorderColor || '#00f0ff')}88, inset 0 0 10px ${(tempLogoFrameBorderColor || '#00f0ff')}44` 
+                            : 'none'
+                        }}
+                        title="Quadro Lâmina do Logotipo"
+                      >
+                        {tempLogoUrl ? (
+                          <img
+                            src={tempLogoUrl}
+                            alt="Preview Logo"
+                            className="w-10 h-10 object-contain transition-all"
+                            style={{
+                              filter: `hue-rotate(${tempLogoHue}deg) saturate(${tempLogoSaturation}%) brightness(${tempLogoBrightness}%) ${tempLogoInvert ? 'invert(100%)' : 'invert(0%)'} drop-shadow(0 0 4px ${tempLogoFrameBorderColor || 'var(--dedsec-primary)'})`
+                            }}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=200&auto=format&fit=crop';
+                            }}
+                          />
+                        ) : (
+                          <div style={{
+                            filter: `hue-rotate(${tempLogoHue}deg) saturate(${tempLogoSaturation}%) brightness(${tempLogoBrightness}%) ${tempLogoInvert ? 'invert(100%)' : 'invert(0%)'}`
+                          }}>
+                            <DedsecSkullIcon 
+                              className="w-9 h-9 transition-colors" 
+                              style={{ color: tempLogoFrameBorderColor || 'var(--dedsec-primary)' }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-mono text-gray-500">MOLDURA 56px</span>
+                    </div>
+
+                    {/* Telemetria do Filtro e Lâmina */}
+                    <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono w-full">
+                      <div className="p-2 bg-black/60 border border-gray-800 space-y-0.5">
+                        <span className="text-gray-500 text-[10px] block">HUE (MATIZ):</span>
+                        <span className="text-[var(--dedsec-primary)] font-bold">{tempLogoHue}°</span>
+                      </div>
+                      <div className="p-2 bg-black/60 border border-gray-800 space-y-0.5">
+                        <span className="text-gray-500 text-[10px] block">SATURAÇÃO:</span>
+                        <span className="text-white font-bold">{tempLogoSaturation}%</span>
+                      </div>
+                      <div className="p-2 bg-black/60 border border-gray-800 space-y-0.5">
+                        <span className="text-gray-500 text-[10px] block">BRILHO:</span>
+                        <span className="text-white font-bold">{tempLogoBrightness}%</span>
+                      </div>
+                      <div className="p-2 bg-black/60 border border-gray-800 space-y-0.5">
+                        <span className="text-gray-500 text-[10px] block">INVERTER COR:</span>
+                        <span className={tempLogoInvert ? "text-[var(--dedsec-accent)] font-bold" : "text-gray-400 font-bold"}>
+                          {tempLogoInvert ? "ATIVADO (100%)" : "DESATIVADO"}
+                        </span>
+                      </div>
+                      <div className="p-2 bg-black/60 border border-gray-800 space-y-0.5">
+                        <span className="text-gray-500 text-[10px] block">QUADRO (BORDA):</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-3 h-3 border border-gray-600 rounded-xs inline-block" style={{ backgroundColor: tempLogoFrameBorderColor }} />
+                          <span className="text-white font-bold text-[11px] uppercase">{tempLogoFrameBorderColor}</span>
+                        </div>
+                      </div>
+                      <div className="p-2 bg-black/60 border border-gray-800 space-y-0.5">
+                        <span className="text-gray-500 text-[10px] block">BRILHO NEON (GLOW):</span>
+                        <span className={tempLogoFrameGlow ? "text-[var(--dedsec-secondary)] font-bold" : "text-gray-400 font-bold"}>
+                          {tempLogoFrameGlow ? "LIGADO" : "DESLIGADO"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* PAINEL 1: AJUSTES DE HSB E INVERSÃO DE COR */}
+                <div className="p-3.5 bg-black/70 border border-gray-800 clip-cyber-corner space-y-3">
+                  <div className="flex items-center justify-between border-b border-gray-800 pb-1.5">
+                    <span className="text-xs font-mono font-bold text-[var(--dedsec-primary)] flex items-center gap-1.5">
+                      <Sliders className="w-3.5 h-3.5" />
+                      AJUSTES HSB & INVERSÃO DE COR DA LOGO
+                    </span>
+                    <button
+                      type="button"
+                      onClick={resetLogoHsb}
+                      className="text-[10px] font-mono text-gray-400 hover:text-white underline cursor-pointer"
+                    >
+                      Restaurar Padrão
+                    </button>
+                  </div>
+
+                  {/* Presets Rápidos de Cores HSB */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] font-mono text-gray-500 font-bold">PRESETS DE COR:</span>
                     <button
                       type="button"
                       onClick={() => {
-                        setTempLogoUrl('');
-                        setLogoFileName('');
+                        setTempLogoHue(0);
+                        setTempLogoSaturation(100);
+                        setTempLogoBrightness(100);
+                        setTempLogoInvert(false);
                         playCyberSound('click', soundEnabled);
                       }}
-                      className="text-xs font-mono text-red-400 hover:underline cursor-pointer"
+                      className="text-[10px] font-mono px-2 py-0.5 bg-black border border-gray-700 hover:border-white text-gray-300 transition-colors cursor-pointer"
                     >
-                      [Restaurar Logo DedSec Padrão]
+                      Padrão
                     </button>
-                  )}
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempLogoHue(180);
+                        setTempLogoSaturation(150);
+                        setTempLogoBrightness(110);
+                        setTempLogoInvert(false);
+                        playCyberSound('click', soundEnabled);
+                      }}
+                      className="text-[10px] font-mono px-2 py-0.5 bg-black border border-[var(--dedsec-primary)] text-[var(--dedsec-primary)] transition-colors cursor-pointer"
+                    >
+                      Ciano DedSec
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempLogoHue(95);
+                        setTempLogoSaturation(180);
+                        setTempLogoBrightness(105);
+                        setTempLogoInvert(false);
+                        playCyberSound('click', soundEnabled);
+                      }}
+                      className="text-[10px] font-mono px-2 py-0.5 bg-black border border-[var(--dedsec-secondary)] text-[var(--dedsec-secondary)] transition-colors cursor-pointer"
+                    >
+                      Matrix Green
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempLogoHue(315);
+                        setTempLogoSaturation(180);
+                        setTempLogoBrightness(115);
+                        setTempLogoInvert(false);
+                        playCyberSound('click', soundEnabled);
+                      }}
+                      className="text-[10px] font-mono px-2 py-0.5 bg-black border border-[var(--dedsec-accent)] text-[var(--dedsec-accent)] transition-colors cursor-pointer"
+                    >
+                      Pink Neon
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempLogoHue(0);
+                        setTempLogoSaturation(0);
+                        setTempLogoBrightness(100);
+                        setTempLogoInvert(true);
+                        playCyberSound('click', soundEnabled);
+                      }}
+                      className="text-[10px] font-mono px-2 py-0.5 bg-black border border-white text-white transition-colors cursor-pointer"
+                    >
+                      Invertido (Preto ↔ Branco)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempLogoHue(0);
+                        setTempLogoSaturation(0);
+                        setTempLogoBrightness(100);
+                        setTempLogoInvert(false);
+                        playCyberSound('click', soundEnabled);
+                      }}
+                      className="text-[10px] font-mono px-2 py-0.5 bg-black border border-gray-600 text-gray-400 transition-colors cursor-pointer"
+                    >
+                      Monocromático (P/B)
+                    </button>
+                  </div>
 
-                <p className="text-xs font-mono text-gray-400">
-                  Defina o logotipo oficial da célula DedSec exibido na barra superior de navegação. Você pode carregar um arquivo direto do computador (PNG transparente, SVG, JPG, WebP ou GIF) ou informar uma URL externa.
-                </p>
-
-                {/* Prévia do Logotipo */}
-                <div className="flex flex-col sm:flex-row items-center gap-4 p-3 bg-black/80 border border-gray-800">
-                  <div className="flex flex-col items-center justify-center p-3 border border-[var(--dedsec-primary)] bg-black clip-cyber-badge min-w-[70px] min-h-[70px]">
-                    {tempLogoUrl ? (
-                      <img
-                        src={tempLogoUrl}
-                        alt="Preview Logo"
-                        className="w-12 h-12 object-contain drop-shadow-[0_0_8px_var(--dedsec-primary)]"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=200&auto=format&fit=crop';
-                        }}
+                  {/* Sliders HSB */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                    {/* Hue (Matiz) */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs font-mono text-gray-300">
+                        <span className="flex items-center gap-1">
+                          <Palette className="w-3 h-3 text-[var(--dedsec-primary)]" />
+                          HUE (MATIZ):
+                        </span>
+                        <span className="text-[var(--dedsec-primary)] font-bold">{tempLogoHue}°</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={360}
+                        value={tempLogoHue}
+                        onChange={(e) => setTempLogoHue(Number(e.target.value))}
+                        className="w-full accent-[var(--dedsec-primary)] h-2 cursor-pointer bg-gradient-to-r from-red-500 via-yellow-500 via-green-500 via-cyan-500 via-blue-500 via-purple-500 to-red-500 rounded-lg"
                       />
-                    ) : (
-                      <DedsecSkullIcon className="w-10 h-10 text-[var(--dedsec-primary)]" />
-                    )}
+                    </div>
+
+                    {/* Saturação */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs font-mono text-gray-300">
+                        <span className="flex items-center gap-1">
+                          <Sun className="w-3 h-3 text-[var(--dedsec-secondary)]" />
+                          SATURAÇÃO:
+                        </span>
+                        <span className="text-[var(--dedsec-secondary)] font-bold">{tempLogoSaturation}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={200}
+                        value={tempLogoSaturation}
+                        onChange={(e) => setTempLogoSaturation(Number(e.target.value))}
+                        className="w-full accent-[var(--dedsec-secondary)] h-2 cursor-pointer bg-gray-800 rounded-lg"
+                      />
+                    </div>
+
+                    {/* Brilho */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs font-mono text-gray-300">
+                        <span className="flex items-center gap-1">
+                          <Sun className="w-3 h-3 text-amber-400" />
+                          BRILHO:
+                        </span>
+                        <span className="text-amber-400 font-bold">{tempLogoBrightness}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={200}
+                        value={tempLogoBrightness}
+                        onChange={(e) => setTempLogoBrightness(Number(e.target.value))}
+                        className="w-full accent-amber-400 h-2 cursor-pointer bg-gray-800 rounded-lg"
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex-1 space-y-1 text-xs font-mono">
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-bold">STATUS DO LOGOTIPO:</span>
-                      <span className={tempLogoUrl ? 'text-[var(--dedsec-secondary)] font-bold' : 'text-[var(--dedsec-primary)] font-bold'}>
-                        {tempLogoUrl ? 'LOGOTIPO PERSONALIZADO ATIVO' : 'ÍCONE PADRÃO DEDSEC SKULL VETORIAL'}
-                      </span>
+                  {/* Toggle Inverter Cor */}
+                  <div className="pt-2 border-t border-gray-800 flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2 text-xs font-mono font-bold text-white">
+                        <Contrast className="w-3.5 h-3.5 text-[var(--dedsec-accent)]" />
+                        <span>INVERTER COR DA LOGO (INVERT FILTER)</span>
+                      </div>
+                      <p className="text-[11px] font-mono text-gray-400">
+                        Inverte todas as cores da logo (100% negativo). Ideal para transformar logos escuros em claros sobre fundos pretos.
+                      </p>
                     </div>
-                    <p className="text-[11px] text-gray-400">
-                      {tempLogoUrl 
-                        ? 'O logotipo selecionado substituirá o ícone padrão na barra de navegação superior.' 
-                        : 'Atualmente exibindo o ícone oficial vetorial DedSec Skull.'}
-                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempLogoInvert(!tempLogoInvert);
+                        playCyberSound('click', soundEnabled);
+                      }}
+                      className={`px-3 py-1.5 font-mono text-xs font-bold border transition-all clip-cyber-badge flex items-center gap-1.5 cursor-pointer ${
+                        tempLogoInvert 
+                          ? 'bg-[var(--dedsec-accent)] text-white border-[var(--dedsec-accent)] shadow-[0_0_10px_rgba(255,0,85,0.4)]' 
+                          : 'bg-black text-gray-400 border-gray-700 hover:border-gray-500'
+                      }`}
+                    >
+                      <Contrast className="w-3.5 h-3.5" />
+                      <span>{tempLogoInvert ? 'INVERSÃO ATIVA [ON]' : 'INVERSÃO DESATIVADA [OFF]'}</span>
+                    </button>
                   </div>
                 </div>
 
-                {/* Input de Arquivo (Upload do Logo) */}
-                <div className="space-y-2">
-                  <label className="text-xs font-mono text-gray-300 flex items-center gap-1.5">
-                    <Upload className="w-3.5 h-3.5 text-[var(--dedsec-primary)]" />
-                    <span>CARREGAR IMAGEM DO LOGOTIPO DO COMPUTADOR</span>
-                  </label>
+                {/* PAINEL 2: LÂMINA DE FUNDO & COR DO QUADRO LÂMINA */}
+                <div className="p-3.5 bg-black/70 border border-gray-800 clip-cyber-corner space-y-4">
+                  <span className="text-xs font-mono font-bold text-[var(--dedsec-secondary)] flex items-center gap-1.5 border-b border-gray-800 pb-1.5">
+                    <Layers className="w-3.5 h-3.5" />
+                    LÂMINA DE FUNDO & COR DO QUADRO LÂMINA (MOLDURA)
+                  </span>
 
+                  {/* 1. LÂMINA DE FUNDO (BACKDROP PLATE) */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs font-mono">
+                      <span className="text-gray-300 font-bold flex items-center gap-1">
+                        <span>LÂMINA DE FUNDO (BASE DO QUADRO):</span>
+                      </span>
+                      <span className="text-[10px] text-gray-500">Cor sólida, gradiente ou transparência</span>
+                    </div>
+
+                    {/* Presets Rápidos de Lâmina */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {[
+                        { name: 'Preto Stealth', bg: '#000000' },
+                        { name: 'Transparente', bg: 'transparent' },
+                        { name: 'Chapa Grafite', bg: '#0d1117' },
+                        { name: 'Fibra de Carbono', bg: 'radial-gradient(circle, #1c1f26 0%, #05070a 100%)' },
+                        { name: 'Lâmina Ciano', bg: 'linear-gradient(135deg, rgba(0,240,255,0.3) 0%, #000000 100%)' },
+                        { name: 'Lâmina Matrix', bg: 'linear-gradient(135deg, rgba(0,255,102,0.25) 0%, #000000 100%)' },
+                        { name: 'Lâmina Rosa Neon', bg: 'linear-gradient(135deg, rgba(255,0,85,0.3) 0%, #000000 100%)' },
+                        { name: 'Lâmina ctOS Âmbar', bg: 'linear-gradient(135deg, rgba(255,230,0,0.25) 0%, #000000 100%)' },
+                      ].map((plate) => (
+                        <button
+                          key={plate.name}
+                          type="button"
+                          onClick={() => {
+                            setTempLogoFrameBg(plate.bg);
+                            playCyberSound('click', soundEnabled);
+                          }}
+                          className={`p-2 text-left border text-xs font-mono transition-all flex items-center gap-2 cursor-pointer ${
+                            tempLogoFrameBg === plate.bg
+                              ? 'border-[var(--dedsec-primary)] bg-[var(--dedsec-primary)]/10 text-white'
+                              : 'border-gray-800 bg-black/50 text-gray-400 hover:border-gray-600 hover:text-gray-200'
+                          }`}
+                        >
+                          <span 
+                            className="w-4 h-4 rounded-xs border border-gray-700 shrink-0" 
+                            style={{ background: plate.bg }}
+                          />
+                          <span className="truncate text-[11px]">{plate.name}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Input manual de cor ou CSS da lâmina */}
+                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 pt-1">
+                      <div className="flex items-center gap-2 border border-gray-700 bg-black px-2 py-1.5 shrink-0">
+                        <input
+                          type="color"
+                          value={tempLogoFrameBg.startsWith('#') && tempLogoFrameBg.length === 7 ? tempLogoFrameBg : '#000000'}
+                          onChange={(e) => setTempLogoFrameBg(e.target.value)}
+                          className="w-6 h-6 border-0 bg-transparent cursor-pointer"
+                        />
+                        <span className="text-[11px] font-mono text-gray-400">Paleta</span>
+                      </div>
+                      <input
+                        type="text"
+                        value={tempLogoFrameBg}
+                        onChange={(e) => setTempLogoFrameBg(e.target.value)}
+                        placeholder="#000000 ou linear-gradient(...) ou transparent"
+                        className="flex-1 px-3 py-1.5 bg-black border border-gray-700 text-white font-mono text-xs focus:border-[var(--dedsec-primary)] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 2. COR DO QUADRO LÂMINA (BORDER & GLOW) */}
+                  <div className="space-y-2 pt-2 border-t border-gray-800">
+                    <div className="flex justify-between items-center text-xs font-mono">
+                      <span className="text-gray-300 font-bold flex items-center gap-1">
+                        <Palette className="w-3.5 h-3.5 text-[var(--dedsec-primary)]" />
+                        <span>COR DO QUADRO LÂMINA (CONTORNO / BORDA):</span>
+                      </span>
+                      <span className="text-[10px] text-gray-500">Cor do contorno e efeito de brilho</span>
+                    </div>
+
+                    {/* Paleta rápida de cores da moldura */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {[
+                        { name: 'Ciano DedSec', color: '#00f0ff' },
+                        { name: 'Verde Matrix', color: '#00ff66' },
+                        { name: 'Rosa Neon', color: '#ff0055' },
+                        { name: 'Âmbar ctOS', color: '#ffe600' },
+                        { name: 'Roxo Cyber', color: '#9d00ff' },
+                        { name: 'Branco Cromo', color: '#ffffff' },
+                        { name: 'Vermelho Sangue', color: '#ff1133' },
+                        { name: 'Laranja Alerta', color: '#ff7700' }
+                      ].map((c) => (
+                        <button
+                          key={c.color}
+                          type="button"
+                          onClick={() => {
+                            setTempLogoFrameBorderColor(c.color);
+                            playCyberSound('click', soundEnabled);
+                          }}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono border transition-all cursor-pointer ${
+                            tempLogoFrameBorderColor.toLowerCase() === c.color.toLowerCase()
+                              ? 'border-white bg-white/10 text-white font-bold'
+                              : 'border-gray-800 bg-black text-gray-400 hover:border-gray-600'
+                          }`}
+                        >
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.color }} />
+                          <span>{c.name}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Color picker e input de texto da cor da moldura */}
+                    <div className="flex items-center gap-3 pt-1">
+                      <div className="flex items-center gap-2 border border-gray-700 bg-black px-2 py-1.5">
+                        <input
+                          type="color"
+                          value={tempLogoFrameBorderColor.startsWith('#') && tempLogoFrameBorderColor.length === 7 ? tempLogoFrameBorderColor : '#00f0ff'}
+                          onChange={(e) => setTempLogoFrameBorderColor(e.target.value)}
+                          className="w-6 h-6 border-0 bg-transparent cursor-pointer"
+                        />
+                        <span className="text-[11px] font-mono text-gray-300 font-bold">{tempLogoFrameBorderColor}</span>
+                      </div>
+
+                      {/* Toggle Brilho Neon (Glow) */}
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-mono text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={tempLogoFrameGlow}
+                          onChange={(e) => setTempLogoFrameGlow(e.target.checked)}
+                          className="accent-[var(--dedsec-primary)] w-4 h-4 cursor-pointer"
+                        />
+                        <span>EFEITO DE BRILHO NEON (GLOW DA LÂMINA)</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* PAINEL 3: ARQUIVO OU URL DA IMAGEM */}
+                <div className="space-y-3 pt-2 border-t border-gray-800">
+                  <span className="text-xs font-mono font-bold text-gray-300 flex items-center gap-1.5">
+                    <Upload className="w-3.5 h-3.5 text-[var(--dedsec-primary)]" />
+                    FONTE DA IMAGEM DO LOGOTIPO (COMPUTADOR OU URL)
+                  </span>
+
+                  {/* Input de Arquivo (Upload do Logo) */}
                   <label className="cursor-pointer block p-3.5 border-2 border-dashed border-gray-700 hover:border-[var(--dedsec-primary)] bg-black text-center transition-all group">
                     <div className="flex flex-col items-center justify-center gap-1.5">
                       <Upload className="w-5 h-5 text-[var(--dedsec-primary)] group-hover:scale-110 transition-transform" />
                       <span className="text-xs font-mono text-white font-bold">
-                        {logoFileName ? `Arquivo Carregado: ${logoFileName}` : 'Clique para Selecionar Imagem de Logo (PNG, SVG, JPG, WebP, GIF)'}
+                        {logoFileName ? `Arquivo Carregado: ${logoFileName}` : 'Clique para Selecionar Imagem de Logo (PNG transparente, SVG, JPG, WebP, GIF)'}
                       </span>
                       <span className="text-[10px] font-mono text-gray-500">
-                        Recomendado: imagem quadrada ou com fundo transparente
+                        Recomendado: imagem com fundo transparente (PNG/SVG) para aproveitar a lâmina de fundo
                       </span>
                     </div>
                     <input
@@ -1711,18 +2159,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       }}
                     />
                   </label>
-                </div>
 
-                {/* URL Direta do Logotipo */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-mono text-gray-400">OU INSIRA UMA URL DIRETA DE IMAGEM / SVG</label>
-                  <input
-                    type="url"
-                    value={tempLogoUrl}
-                    onChange={(e) => setTempLogoUrl(e.target.value)}
-                    placeholder="https://exemplo.com/meu-logo.png ou https://.../logo.svg"
-                    className="w-full px-3 py-2 bg-black border border-gray-700 text-white font-mono text-xs focus:border-[var(--dedsec-primary)] focus:outline-none"
-                  />
+                  {/* URL Direta do Logotipo */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-mono text-gray-400">OU INSIRA UMA URL DIRETA DE IMAGEM / SVG</label>
+                    <input
+                      type="url"
+                      value={tempLogoUrl}
+                      onChange={(e) => setTempLogoUrl(e.target.value)}
+                      placeholder="https://exemplo.com/meu-logo.png ou https://.../logo.svg"
+                      className="w-full px-3 py-2 bg-black border border-gray-700 text-white font-mono text-xs focus:border-[var(--dedsec-primary)] focus:outline-none"
+                    />
+                  </div>
                 </div>
 
               </div>
