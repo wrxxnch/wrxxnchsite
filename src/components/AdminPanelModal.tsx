@@ -26,7 +26,9 @@ import {
   Layers,
   RotateCcw,
   Sun,
-  Contrast
+  Contrast,
+  Maximize2,
+  Grid
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { Post, AdminUser, SplashItem, SiteSettings } from '../types';
@@ -135,6 +137,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [tempLogoFrameBg, setTempLogoFrameBg] = useState(settings.logoFrameBg || '#000000');
   const [tempLogoFrameBorderColor, setTempLogoFrameBorderColor] = useState(settings.logoFrameBorderColor || '#00f0ff');
   const [tempLogoFrameGlow, setTempLogoFrameGlow] = useState(settings.logoFrameGlow ?? true);
+  const [tempLogoFrameEnabled, setTempLogoFrameEnabled] = useState(settings.logoFrameEnabled ?? true);
+  const [tempLogoSize, setTempLogoSize] = useState(settings.logoSize ?? 36);
+  const [previewBgMode, setPreviewBgMode] = useState<'dark' | 'grid' | 'light' | 'navbar'>('dark');
+  const [previewZoom, setPreviewZoom] = useState<number>(1);
   const [logoFileName, setLogoFileName] = useState('');
   const [customizationSaved, setCustomizationSaved] = useState(false);
 
@@ -198,6 +204,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setTempLogoFrameBg(settings.logoFrameBg || '#000000');
     setTempLogoFrameBorderColor(settings.logoFrameBorderColor || '#00f0ff');
     setTempLogoFrameGlow(settings.logoFrameGlow ?? true);
+    setTempLogoFrameEnabled(settings.logoFrameEnabled ?? true);
+    setTempLogoSize(settings.logoSize ?? 36);
     setTempWallpaperUrl(settings.wallpaperUrl);
     setTempWallpaperOpacity(settings.wallpaperOpacity);
     setTempWallpaperBlur(settings.wallpaperBlur);
@@ -513,6 +521,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         logoFrameBg: tempLogoFrameBg,
         logoFrameBorderColor: tempLogoFrameBorderColor,
         logoFrameGlow: tempLogoFrameGlow,
+        logoFrameEnabled: tempLogoFrameEnabled,
+        logoSize: tempLogoSize,
         tickerRawText: bulkSplashText
       };
 
@@ -1715,91 +1725,292 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   Defina o logotipo oficial da célula DedSec exibido na barra superior de navegação. Personalize os filtros de cores <strong className="text-white">HSB</strong> (Matiz, Saturação, Brilho, Inversão de cor), a <strong className="text-white">lâmina de fundo</strong> (placa base do quadro) e a <strong className="text-white">cor do contorno do quadro lâmina</strong> com efeito neon.
                 </p>
 
-                {/* Prévia Interativa da Lâmina do Logotipo */}
-                <div className="p-4 bg-black/90 border border-gray-800 clip-cyber-corner space-y-3">
-                  <div className="flex items-center justify-between border-b border-gray-800/80 pb-2">
-                    <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5">
-                      <Eye className="w-3.5 h-3.5 text-[var(--dedsec-primary)]" />
-                      PRÉVIA EM TEMPO REAL (COMO APARECE NA NAVBAR)
-                    </span>
-                    <span className="text-[10px] font-mono text-gray-400">
-                      {tempLogoUrl ? 'IMAGEM CARREGADA' : 'SKULL PADRÃO VETORIAL'}
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row items-center gap-5 pt-1">
-                    {/* O Quadro / Lâmina da Logo */}
-                    <div className="flex flex-col items-center gap-1.5">
-                      <div 
-                        className="relative p-2.5 clip-cyber-badge flex items-center justify-center transition-all min-w-[56px] min-h-[56px] cursor-pointer overflow-hidden border"
-                        style={{
-                          background: tempLogoFrameBg || '#000000',
-                          borderColor: tempLogoFrameBorderColor || 'var(--dedsec-primary)',
-                          boxShadow: tempLogoFrameGlow 
-                            ? `0 0 16px ${(tempLogoFrameBorderColor || '#00f0ff')}88, inset 0 0 10px ${(tempLogoFrameBorderColor || '#00f0ff')}44` 
-                            : 'none'
-                        }}
-                        title="Quadro Lâmina do Logotipo"
-                      >
-                        {tempLogoUrl ? (
-                          <img
-                            src={tempLogoUrl}
-                            alt="Preview Logo"
-                            className="w-10 h-10 object-contain transition-all"
-                            style={{
-                              filter: `hue-rotate(${tempLogoHue}deg) saturate(${tempLogoSaturation}%) brightness(${tempLogoBrightness}%) ${tempLogoInvert ? 'invert(100%)' : 'invert(0%)'} drop-shadow(0 0 4px ${tempLogoFrameBorderColor || 'var(--dedsec-primary)'})`
-                            }}
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=200&auto=format&fit=crop';
-                            }}
-                          />
-                        ) : (
-                          <div style={{
-                            filter: `hue-rotate(${tempLogoHue}deg) saturate(${tempLogoSaturation}%) brightness(${tempLogoBrightness}%) ${tempLogoInvert ? 'invert(100%)' : 'invert(0%)'}`
-                          }}>
-                            <DedsecSkullIcon 
-                              className="w-9 h-9 transition-colors" 
-                              style={{ color: tempLogoFrameBorderColor || 'var(--dedsec-primary)' }}
-                            />
-                          </div>
-                        )}
+                {/* STUDIO DE PRÉVIA EM TEMPO REAL // GRANDE PREVIEW INTERATIVO DA LOGO */}
+                <div className="p-4 sm:p-5 bg-black/95 border-2 border-[var(--dedsec-primary)] clip-cyber-corner space-y-4 shadow-[0_0_25px_rgba(0,240,255,0.15)]">
+                  <div className="flex flex-wrap items-center justify-between border-b border-gray-800 pb-3 gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1 bg-[var(--dedsec-primary)]/20 border border-[var(--dedsec-primary)] text-[var(--dedsec-primary)]">
+                        <Eye className="w-4 h-4" />
                       </div>
-                      <span className="text-[10px] font-mono text-gray-500">MOLDURA 56px</span>
+                      <div>
+                        <span className="text-xs font-display font-bold text-white tracking-wider block">
+                          GRANDE PRÉVIA EM TEMPO REAL // LOGOTIPO HUD STUDIO
+                        </span>
+                        <span className="text-[10px] font-mono text-gray-400">
+                          {tempLogoUrl ? `ARQUIVO / URL ATIVA [${tempLogoSize}px]` : `SKULL DEDSEC VETORIAL [${tempLogoSize}px]`} • Atualização Instantânea por HSB & Tamanho
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Telemetria do Filtro e Lâmina */}
-                    <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono w-full">
-                      <div className="p-2 bg-black/60 border border-gray-800 space-y-0.5">
-                        <span className="text-gray-500 text-[10px] block">HUE (MATIZ):</span>
-                        <span className="text-[var(--dedsec-primary)] font-bold">{tempLogoHue}°</span>
+                    {/* Controles de Fundo & Zoom */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Modo de Fundo */}
+                      <div className="flex items-center bg-black/80 border border-gray-800 p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewBgMode('dark')}
+                          className={`px-2 py-1 text-[10px] font-mono transition-colors ${previewBgMode === 'dark' ? 'bg-[var(--dedsec-primary)] text-black font-bold' : 'text-gray-400 hover:text-white'}`}
+                          title="Fundo Preto / Cyber"
+                        >
+                          Escuro
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewBgMode('grid')}
+                          className={`px-2 py-1 text-[10px] font-mono transition-colors ${previewBgMode === 'grid' ? 'bg-[var(--dedsec-primary)] text-black font-bold' : 'text-gray-400 hover:text-white'}`}
+                          title="Grade de Transparência (Alpha PNG / SVG)"
+                        >
+                          Grade Alfa
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewBgMode('light')}
+                          className={`px-2 py-1 text-[10px] font-mono transition-colors ${previewBgMode === 'light' ? 'bg-[var(--dedsec-primary)] text-black font-bold' : 'text-gray-400 hover:text-white'}`}
+                          title="Fundo Claro de Alto Contraste"
+                        >
+                          Claro
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewBgMode('navbar')}
+                          className={`px-2 py-1 text-[10px] font-mono transition-colors ${previewBgMode === 'navbar' ? 'bg-[var(--dedsec-primary)] text-black font-bold' : 'text-gray-400 hover:text-white'}`}
+                          title="Simular Barra Superior Completa (Navbar)"
+                        >
+                          Navbar
+                        </button>
                       </div>
-                      <div className="p-2 bg-black/60 border border-gray-800 space-y-0.5">
-                        <span className="text-gray-500 text-[10px] block">SATURAÇÃO:</span>
-                        <span className="text-white font-bold">{tempLogoSaturation}%</span>
-                      </div>
-                      <div className="p-2 bg-black/60 border border-gray-800 space-y-0.5">
-                        <span className="text-gray-500 text-[10px] block">BRILHO:</span>
-                        <span className="text-white font-bold">{tempLogoBrightness}%</span>
-                      </div>
-                      <div className="p-2 bg-black/60 border border-gray-800 space-y-0.5">
-                        <span className="text-gray-500 text-[10px] block">INVERTER COR:</span>
-                        <span className={tempLogoInvert ? "text-[var(--dedsec-accent)] font-bold" : "text-gray-400 font-bold"}>
-                          {tempLogoInvert ? "ATIVADO (100%)" : "DESATIVADO"}
-                        </span>
-                      </div>
-                      <div className="p-2 bg-black/60 border border-gray-800 space-y-0.5">
-                        <span className="text-gray-500 text-[10px] block">QUADRO (BORDA):</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-3 h-3 border border-gray-600 rounded-xs inline-block" style={{ backgroundColor: tempLogoFrameBorderColor }} />
-                          <span className="text-white font-bold text-[11px] uppercase">{tempLogoFrameBorderColor}</span>
+
+                      {/* Zoom do Preview */}
+                      {previewBgMode !== 'navbar' && (
+                        <div className="flex items-center bg-black/80 border border-gray-800 p-0.5">
+                          {[
+                            { label: '1x Real', z: 1 },
+                            { label: '1.5x', z: 1.5 },
+                            { label: '2x HD', z: 2 },
+                            { label: '3x Macro', z: 3 }
+                          ].map((item) => (
+                            <button
+                              key={item.z}
+                              type="button"
+                              onClick={() => setPreviewZoom(item.z)}
+                              className={`px-2 py-1 text-[10px] font-mono transition-colors ${previewZoom === item.z ? 'bg-[var(--dedsec-secondary)] text-black font-bold' : 'text-gray-400 hover:text-white'}`}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Stage Central de Prévia Expandida */}
+                  {previewBgMode === 'navbar' ? (
+                    /* Simulação Real da Barra de Navegação */
+                    <div className="w-full border border-[var(--dedsec-border)] bg-[var(--dedsec-bg)]/95 p-3 sm:px-6 flex items-center justify-between gap-4 overflow-hidden rounded">
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className={`relative flex items-center justify-center transition-all ${
+                            tempLogoFrameEnabled 
+                              ? 'p-1.5 clip-cyber-badge border overflow-hidden' 
+                              : 'p-0.5 bg-transparent border-0'
+                          }`}
+                          style={{
+                            background: tempLogoFrameEnabled ? (tempLogoFrameBg || '#000000') : 'transparent',
+                            borderColor: tempLogoFrameEnabled ? (tempLogoFrameBorderColor || 'var(--dedsec-primary)') : 'transparent',
+                            boxShadow: (tempLogoFrameEnabled && tempLogoFrameGlow)
+                              ? `0 0 10px ${(tempLogoFrameBorderColor || '#00f0ff')}80, inset 0 0 8px ${(tempLogoFrameBorderColor || '#00f0ff')}30` 
+                              : 'none',
+                            minWidth: tempLogoFrameEnabled ? `${Math.max(tempLogoSize + 10, 36)}px` : `${tempLogoSize}px`,
+                            minHeight: tempLogoFrameEnabled ? `${Math.max(tempLogoSize + 10, 36)}px` : `${tempLogoSize}px`
+                          }}
+                        >
+                          {tempLogoUrl ? (
+                            <img
+                              src={tempLogoUrl}
+                              alt="Navbar Preview"
+                              className="object-contain transition-all"
+                              style={{
+                                width: `${tempLogoSize}px`,
+                                height: `${tempLogoSize}px`,
+                                filter: (tempLogoFrameEnabled && tempLogoFrameGlow)
+                                  ? `hue-rotate(${tempLogoHue}deg) saturate(${tempLogoSaturation}%) brightness(${tempLogoBrightness}%) ${tempLogoInvert ? 'invert(100%)' : 'invert(0%)'} drop-shadow(0 0 4px ${tempLogoFrameBorderColor || 'var(--dedsec-primary)'})`
+                                  : `hue-rotate(${tempLogoHue}deg) saturate(${tempLogoSaturation}%) brightness(${tempLogoBrightness}%) ${tempLogoInvert ? 'invert(100%)' : 'invert(0%)'}`
+                              }}
+                            />
+                          ) : (
+                            <div style={{
+                              filter: `hue-rotate(${tempLogoHue}deg) saturate(${tempLogoSaturation}%) brightness(${tempLogoBrightness}%) ${tempLogoInvert ? 'invert(100%)' : 'invert(0%)'}`,
+                              width: `${tempLogoSize}px`,
+                              height: `${tempLogoSize}px`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                              <DedsecSkullIcon 
+                                className="transition-colors" 
+                                style={{ 
+                                  color: tempLogoFrameBorderColor || 'var(--dedsec-primary)',
+                                  width: `${Math.max(tempLogoSize - 4, 18)}px`,
+                                  height: `${Math.max(tempLogoSize - 4, 18)}px`
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <span className="font-display font-bold text-sm sm:text-base text-white tracking-wider block">
+                            {settings.siteTitle || 'DEDSEC // SF_CELL'}
+                          </span>
+                          <span className="text-[10px] font-mono text-[var(--dedsec-primary)]">
+                            ctOS 2.0 OVERRIDDEN // NÓ ATIVO
+                          </span>
                         </div>
                       </div>
-                      <div className="p-2 bg-black/60 border border-gray-800 space-y-0.5">
-                        <span className="text-gray-500 text-[10px] block">BRILHO NEON (GLOW):</span>
-                        <span className={tempLogoFrameGlow ? "text-[var(--dedsec-secondary)] font-bold" : "text-gray-400 font-bold"}>
-                          {tempLogoFrameGlow ? "LIGADO" : "DESLIGADO"}
+
+                      <div className="hidden sm:flex items-center gap-3 text-xs font-mono text-gray-400">
+                        <span className="px-2 py-0.5 border border-gray-800 bg-black/50">23:59:59</span>
+                        <span className="px-2.5 py-1 bg-[var(--dedsec-primary)]/10 text-[var(--dedsec-primary)] border border-[var(--dedsec-primary)] font-bold text-[10px]">
+                          ROOT ACCESS
                         </span>
                       </div>
+                    </div>
+                  ) : (
+                    /* Stage Ampliado com Suporte a Zoom, Grid de Transparência e Lâmina Removível */
+                    <div 
+                      className={`relative w-full min-h-[220px] sm:min-h-[260px] flex flex-col items-center justify-center p-6 border transition-all overflow-hidden ${
+                        previewBgMode === 'light' 
+                          ? 'bg-slate-200 border-slate-400' 
+                          : previewBgMode === 'grid' 
+                            ? 'border-gray-800' 
+                            : 'bg-gradient-to-b from-[#070b12] to-[#020408] border-gray-800'
+                      }`}
+                      style={
+                        previewBgMode === 'grid' 
+                          ? {
+                              backgroundImage: 'linear-gradient(45deg, #181c24 25%, transparent 25%), linear-gradient(-45deg, #181c24 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #181c24 75%), linear-gradient(-45deg, transparent 75%, #181c24 75%)',
+                              backgroundSize: '20px 20px',
+                              backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
+                              backgroundColor: '#0c0f16'
+                            } 
+                          : undefined
+                      }
+                    >
+                      {/* Grid sutil decorativo */}
+                      {previewBgMode === 'dark' && (
+                        <div className="absolute inset-0 pointer-events-none opacity-20 bg-[radial-gradient(#00f0ff_1px,transparent_1px)] [background-size:16px_16px]" />
+                      )}
+
+                      {/* Tag de Status da Lâmina */}
+                      <div className="absolute top-2 left-2 z-10">
+                        {tempLogoFrameEnabled ? (
+                          <span className="px-2 py-0.5 bg-[var(--dedsec-primary)]/20 border border-[var(--dedsec-primary)] text-[var(--dedsec-primary)] font-mono text-[10px] font-bold">
+                            LÂMINA ATIVA
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-red-500/20 border border-red-500 text-red-400 font-mono text-[10px] font-bold">
+                            LÂMINA REMOVIDA (APENAS O LOGOTIPO PURO)
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Tag de Escala */}
+                      <div className="absolute top-2 right-2 z-10">
+                        <span className="px-2 py-0.5 bg-black/80 border border-gray-700 text-gray-300 font-mono text-[10px]">
+                          TAMANHO: {tempLogoSize}px {previewZoom > 1 ? `(${previewZoom}x = ${Math.round(tempLogoSize * previewZoom)}px)` : ''}
+                        </span>
+                      </div>
+
+                      {/* Logo Centralizado */}
+                      <div className="flex flex-col items-center justify-center gap-2 z-10">
+                        <div 
+                          className={`relative flex items-center justify-center transition-all ${
+                            tempLogoFrameEnabled 
+                              ? 'p-2.5 sm:p-3 clip-cyber-badge border overflow-hidden' 
+                              : 'p-1 bg-transparent border-0'
+                          }`}
+                          style={{
+                            background: tempLogoFrameEnabled ? (tempLogoFrameBg || '#000000') : 'transparent',
+                            borderColor: tempLogoFrameEnabled ? (tempLogoFrameBorderColor || 'var(--dedsec-primary)') : 'transparent',
+                            boxShadow: (tempLogoFrameEnabled && tempLogoFrameGlow)
+                              ? `0 0 ${20 * previewZoom}px ${(tempLogoFrameBorderColor || '#00f0ff')}99, inset 0 0 ${12 * previewZoom}px ${(tempLogoFrameBorderColor || '#00f0ff')}44` 
+                              : 'none',
+                            minWidth: tempLogoFrameEnabled ? `${Math.max(tempLogoSize * previewZoom + 16, 44)}px` : `${tempLogoSize * previewZoom}px`,
+                            minHeight: tempLogoFrameEnabled ? `${Math.max(tempLogoSize * previewZoom + 16, 44)}px` : `${tempLogoSize * previewZoom}px`
+                          }}
+                        >
+                          {tempLogoUrl ? (
+                            <img
+                              src={tempLogoUrl}
+                              alt="Logo Studio Preview"
+                              className="object-contain transition-all"
+                              style={{
+                                width: `${tempLogoSize * previewZoom}px`,
+                                height: `${tempLogoSize * previewZoom}px`,
+                                filter: (tempLogoFrameEnabled && tempLogoFrameGlow)
+                                  ? `hue-rotate(${tempLogoHue}deg) saturate(${tempLogoSaturation}%) brightness(${tempLogoBrightness}%) ${tempLogoInvert ? 'invert(100%)' : 'invert(0%)'} drop-shadow(0 0 6px ${tempLogoFrameBorderColor || 'var(--dedsec-primary)'})`
+                                  : `hue-rotate(${tempLogoHue}deg) saturate(${tempLogoSaturation}%) brightness(${tempLogoBrightness}%) ${tempLogoInvert ? 'invert(100%)' : 'invert(0%)'}`
+                              }}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=200&auto=format&fit=crop';
+                              }}
+                            />
+                          ) : (
+                            <div style={{
+                              filter: `hue-rotate(${tempLogoHue}deg) saturate(${tempLogoSaturation}%) brightness(${tempLogoBrightness}%) ${tempLogoInvert ? 'invert(100%)' : 'invert(0%)'}`,
+                              width: `${tempLogoSize * previewZoom}px`,
+                              height: `${tempLogoSize * previewZoom}px`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                              <DedsecSkullIcon 
+                                className="transition-colors" 
+                                style={{ 
+                                  color: tempLogoFrameBorderColor || 'var(--dedsec-primary)',
+                                  width: `${Math.max(tempLogoSize * previewZoom - 4, 20)}px`,
+                                  height: `${Math.max(tempLogoSize * previewZoom - 4, 20)}px`
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        <span className="text-[11px] font-mono text-gray-400 mt-1">
+                          {tempLogoFrameEnabled ? `Moldura Ativa (${Math.round(tempLogoSize * previewZoom + 16)}px)` : 'Lâmina Removida (100% Transparente)'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Telemetria HUD do Filtro HSB e Parâmetros da Logo */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 text-xs font-mono w-full pt-1">
+                    <div className="p-2 bg-black/80 border border-gray-800">
+                      <span className="text-gray-500 text-[10px] block font-bold">TAMANHO:</span>
+                      <span className="text-[var(--dedsec-secondary)] font-bold">{tempLogoSize}px</span>
+                    </div>
+                    <div className="p-2 bg-black/80 border border-gray-800">
+                      <span className="text-gray-500 text-[10px] block font-bold">LÂMINA:</span>
+                      <span className={tempLogoFrameEnabled ? "text-[var(--dedsec-primary)] font-bold" : "text-red-400 font-bold"}>
+                        {tempLogoFrameEnabled ? "ATIVA" : "REMOVIDA"}
+                      </span>
+                    </div>
+                    <div className="p-2 bg-black/80 border border-gray-800">
+                      <span className="text-gray-500 text-[10px] block font-bold">HUE (MATIZ):</span>
+                      <span className="text-[var(--dedsec-primary)] font-bold">{tempLogoHue}°</span>
+                    </div>
+                    <div className="p-2 bg-black/80 border border-gray-800">
+                      <span className="text-gray-500 text-[10px] block font-bold">SATURAÇÃO:</span>
+                      <span className="text-white font-bold">{tempLogoSaturation}%</span>
+                    </div>
+                    <div className="p-2 bg-black/80 border border-gray-800">
+                      <span className="text-gray-500 text-[10px] block font-bold">BRILHO:</span>
+                      <span className="text-white font-bold">{tempLogoBrightness}%</span>
+                    </div>
+                    <div className="p-2 bg-black/80 border border-gray-800">
+                      <span className="text-gray-500 text-[10px] block font-bold">INVERTER:</span>
+                      <span className={tempLogoInvert ? "text-[var(--dedsec-accent)] font-bold" : "text-gray-400 font-bold"}>
+                        {tempLogoInvert ? "LIGADO (100%)" : "DESLIGADO"}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1993,12 +2204,139 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   </div>
                 </div>
 
+                {/* PAINEL: TAMANHO DA LOGO NA BARRA DE NAVEGAÇÃO */}
+                <div className="p-3.5 bg-black/70 border border-gray-800 clip-cyber-corner space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 pb-1.5">
+                    <span className="text-xs font-mono font-bold text-[var(--dedsec-secondary)] flex items-center gap-1.5">
+                      <Maximize2 className="w-3.5 h-3.5" />
+                      TAMANHO DA LOGO NA NAVBAR (ESCALA EM PIXELS)
+                    </span>
+                    <span className="text-xs font-mono font-bold px-2 py-0.5 bg-[var(--dedsec-secondary)]/15 border border-[var(--dedsec-secondary)] text-[var(--dedsec-secondary)]">
+                      {tempLogoSize}px
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] font-mono text-gray-400">
+                    Ajuste o tamanho do logotipo exibido no canto superior esquerdo da barra de navegação e na grande prévia acima.
+                  </p>
+
+                  <div className="space-y-3 pt-1">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={20}
+                        max={100}
+                        value={tempLogoSize}
+                        onChange={(e) => setTempLogoSize(Number(e.target.value))}
+                        className="flex-1 accent-[var(--dedsec-secondary)] h-2 cursor-pointer bg-gray-800 rounded-lg"
+                      />
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min={20}
+                          max={100}
+                          value={tempLogoSize}
+                          onChange={(e) => setTempLogoSize(Math.max(20, Math.min(100, Number(e.target.value) || 20)))}
+                          className="w-16 px-2 py-1 bg-black border border-gray-700 text-xs font-mono text-white text-center"
+                        />
+                        <span className="text-xs font-mono text-gray-500">px</span>
+                      </div>
+                    </div>
+
+                    {/* Presets Rápidos de Tamanho */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-mono text-gray-500 font-bold">PRESETS:</span>
+                      {[
+                        { label: 'Compacto (28px)', size: 28 },
+                        { label: 'Padrão (36px)', size: 36 },
+                        { label: 'Médio (48px)', size: 48 },
+                        { label: 'Grande (64px)', size: 64 },
+                        { label: 'Extra (80px)', size: 80 }
+                      ].map((preset) => (
+                        <button
+                          key={preset.size}
+                          type="button"
+                          onClick={() => {
+                            setTempLogoSize(preset.size);
+                            playCyberSound('click', soundEnabled);
+                          }}
+                          className={`text-[10px] font-mono px-2.5 py-1 border transition-all cursor-pointer ${
+                            tempLogoSize === preset.size
+                              ? 'border-[var(--dedsec-secondary)] bg-[var(--dedsec-secondary)]/20 text-[var(--dedsec-secondary)] font-bold'
+                              : 'border-gray-800 bg-black text-gray-400 hover:border-gray-600 hover:text-white'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
                 {/* PAINEL 2: LÂMINA DE FUNDO & COR DO QUADRO LÂMINA */}
                 <div className="p-3.5 bg-black/70 border border-gray-800 clip-cyber-corner space-y-4">
-                  <span className="text-xs font-mono font-bold text-[var(--dedsec-secondary)] flex items-center gap-1.5 border-b border-gray-800 pb-1.5">
-                    <Layers className="w-3.5 h-3.5" />
-                    LÂMINA DE FUNDO & COR DO QUADRO LÂMINA (MOLDURA)
-                  </span>
+                  <div className="flex flex-wrap items-center justify-between border-b border-gray-800 pb-2 gap-2">
+                    <span className="text-xs font-mono font-bold text-[var(--dedsec-primary)] flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5" />
+                      LÂMINA DE FUNDO & MOLDURA CIBERNÉTICA DO LOGO
+                    </span>
+
+                    {/* BOTÃO PARA REMOVER / ATIVAR LÂMINA */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempLogoFrameEnabled(!tempLogoFrameEnabled);
+                        playCyberSound('click', soundEnabled);
+                      }}
+                      className={`px-3 py-1 font-mono text-xs font-bold border transition-all clip-cyber-badge flex items-center gap-1.5 cursor-pointer ${
+                        tempLogoFrameEnabled 
+                          ? 'bg-[var(--dedsec-primary)] text-black border-[var(--dedsec-primary)] shadow-[0_0_12px_rgba(0,240,255,0.3)]' 
+                          : 'bg-red-500/20 text-red-400 border-red-500 hover:bg-red-500/30'
+                      }`}
+                      title={tempLogoFrameEnabled ? "Clique para remover a lâmina decorativa da logo" : "Clique para reativar a lâmina decorativa"}
+                    >
+                      {tempLogoFrameEnabled ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>LÂMINA ATIVA [ON]</span>
+                        </>
+                      ) : (
+                        <>
+                          <X className="w-3.5 h-3.5" />
+                          <span>LÂMINA REMOVIDA [OFF]</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Alerta / Status da Lâmina */}
+                  {!tempLogoFrameEnabled ? (
+                    <div className="p-3 bg-red-950/20 border border-red-900/50 text-red-300 text-xs font-mono flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <span className="font-bold flex items-center gap-1.5 text-red-400">
+                          <X className="w-3.5 h-3.5" />
+                          OPÇÃO DE LÂMINA REMOVIDA ATIVADA
+                        </span>
+                        <p className="text-[11px] text-gray-400">
+                          O logotipo será exibido livremente sem moldura, borda ou placa de fundo na barra superior.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempLogoFrameEnabled(true);
+                          playCyberSound('click', soundEnabled);
+                        }}
+                        className="px-2.5 py-1 text-xs font-mono font-bold bg-black border border-red-500 text-red-400 hover:bg-red-500 hover:text-white transition-colors cursor-pointer shrink-0"
+                      >
+                        Reativar Lâmina
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] font-mono text-gray-400">
+                      Personalize a placa base que fica sob a imagem do logotipo e a cor neon do contorno. Você pode desativar a lâmina clicando no botão acima se preferir apenas o ícone transparente puro.
+                    </p>
+                  )}
 
                   {/* 1. LÂMINA DE FUNDO (BACKDROP PLATE) */}
                   <div className="space-y-2">

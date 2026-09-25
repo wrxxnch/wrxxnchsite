@@ -107,7 +107,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 style={{
                   width: `${logoSize}px`,
                   height: `${logoSize}px`,
-                  filter: `${logoFilter} drop-shadow(0 0 4px ${frameBorder})`
+                  filter: (logoFrameEnabled && logoFrameGlow)
+                    ? `${logoFilter} drop-shadow(0 0 4px ${frameBorder})`
+                    : logoFilter
                 }}
                 onError={() => setLogoLoadError(true)}
               />

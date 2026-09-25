@@ -33,7 +33,6 @@ import {
 import { Post, AdminUser, SplashItem, SiteSettings } from './types';
 import { Navbar } from './components/Navbar';
 import { DailySplashHero } from './components/DailySplashHero';
-import { SplashesBar } from './components/SplashesBar';
 import { PostCard } from './components/PostCard';
 import { PostModal } from './components/PostModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
@@ -223,6 +222,8 @@ export default function App() {
           logoFrameBg={settings.logoFrameBg}
           logoFrameBorderColor={settings.logoFrameBorderColor}
           logoFrameGlow={settings.logoFrameGlow}
+          logoFrameEnabled={settings.logoFrameEnabled}
+          logoSize={settings.logoSize}
           siteTitle={settings.siteTitle}
         />
 
@@ -270,22 +271,6 @@ export default function App() {
             onOpenMediaModal={(url, type, title) => setActiveMedia({ url, type, title })}
             isAdmin={isAdmin}
             onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
-          />
-
-          {/* Section 2: Splashes Bar (Abas de Splash Relevante do Dia e Splashes Comuns) */}
-          <SplashesBar
-            splashes={splashes}
-            soundEnabled={soundEnabled}
-            onSelectSplash={(s) => {
-              if (s.mediaUrl) {
-                setActiveMedia({
-                  url: s.mediaUrl,
-                  type: s.mediaType === 'video' ? 'video' : 'image',
-                  title: s.text
-                });
-              }
-            }}
-            onOpenMediaModal={(url, type, title) => setActiveMedia({ url, type, title })}
           />
 
           {/* Section 3: Filter & Search Controls */}
