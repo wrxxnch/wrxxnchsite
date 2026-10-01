@@ -12,7 +12,19 @@
  */
 
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth';
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  EmailAuthProvider,
+  linkWithCredential,
+  updatePassword,
+  reauthenticateWithCredential,
+  signOut, 
+  User 
+} from 'firebase/auth';
 import { 
   getFirestore, 
   collection, 
@@ -41,22 +53,18 @@ googleProvider.setCustomParameters({
 });
 
 // Initialize Firestore using the configured database ID
-export const db = firebaseConfig.firestoreDatabaseId 
+export const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
   ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
   : getFirestore(app);
 
-// Auth actions
-export const loginWithGoogle = async (): Promise<User> => {
-  const result = await signInWithPopup(auth, googleProvider);
-  const user = result.user;
-  
-  // If owner logged in, automatically ensure root record in admins collection
+// Helper to guarantee root owner entry in admins collection
+export const ensureOwnerAdmin = async (user: User) => {
   if (user.email && user.email.toLowerCase() === OWNER_EMAIL.toLowerCase()) {
     try {
       await setDoc(doc(db, 'admins', OWNER_EMAIL.toLowerCase()), {
         email: OWNER_EMAIL.toLowerCase(),
         role: 'owner',
-        name: user.displayName || 'Root Owner',
+        name: user.displayName || 'Root Operator',
         addedAt: Date.now(),
         addedBy: 'root_init'
       }, { merge: true });
@@ -64,7 +72,82 @@ export const loginWithGoogle = async (): Promise<User> => {
       // Ignore if write rules reject before rule deployment
     }
   }
+};
+
+// Auth actions
+export const loginWithGoogle = async (): Promise<User> => {
+  const result = await signInWithPopup(auth, googleProvider);
+  const user = result.user;
+  await ensureOwnerAdmin(user);
   return user;
+};
+
+export const loginWithEmail = async (email: string, pass: string): Promise<User> => {
+  const cleanEmail = email.trim().toLowerCase();
+  const result = await signInWithEmailAndPassword(auth, cleanEmail, pass);
+  await ensureOwnerAdmin(result.user);
+  return result.user;
+};
+
+export const registerWithEmail = async (email: string, pass: string): Promise<User> => {
+  const cleanEmail = email.trim().toLowerCase();
+  const result = await createUserWithEmailAndPassword(auth, cleanEmail, pass);
+  await ensureOwnerAdmin(result.user);
+  return result.user;
+};
+
+export const loginOrRegisterWithEmail = async (email: string, pass: string): Promise<{ user: User; created: boolean }> => {
+  const cleanEmail = email.trim().toLowerCase();
+  try {
+    const cred = await signInWithEmailAndPassword(auth, cleanEmail, pass);
+    await ensureOwnerAdmin(cred.user);
+    return { user: cred.user, created: false };
+  } catch (err: unknown) {
+    const firebaseErr = err as { code?: string; message?: string };
+    // If user does not exist or credentials invalid, attempt creation
+    if (firebaseErr?.code === 'auth/user-not-found' || firebaseErr?.code === 'auth/invalid-credential') {
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, pass);
+        await ensureOwnerAdmin(cred.user);
+        return { user: cred.user, created: true };
+      } catch (createErr: unknown) {
+        const createFirebaseErr = createErr as { code?: string };
+        if (createFirebaseErr?.code === 'auth/email-already-in-use') {
+          // If already in use, rethrow original sign-in error (wrong password)
+          throw err;
+        }
+        throw createErr;
+      }
+    }
+    throw err;
+  }
+};
+
+export const linkOrUpdateUserPassword = async (pass: string): Promise<void> => {
+  if (!auth.currentUser) throw new Error('Nenhum usuário conectado atualmente.');
+  if (auth.currentUser.email) {
+    try {
+      const credential = EmailAuthProvider.credential(auth.currentUser.email, pass);
+      await linkWithCredential(auth.currentUser, credential);
+    } catch (err: unknown) {
+      const linkErr = err as { code?: string };
+      if (linkErr?.code === 'auth/provider-already-linked' || linkErr?.code === 'auth/credential-already-in-use') {
+        await updatePassword(auth.currentUser, pass);
+      } else {
+        throw err;
+      }
+    }
+  } else {
+    await updatePassword(auth.currentUser, pass);
+  }
+};
+
+export const reauthenticateUserWithPassword = async (currentPassword: string): Promise<void> => {
+  if (!auth.currentUser || !auth.currentUser.email) {
+    throw new Error('Nenhum usuário conectado para reautenticação.');
+  }
+  const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+  await reauthenticateWithCredential(auth.currentUser, credential);
 };
 
 export const logoutUser = async (): Promise<void> => {

@@ -28,7 +28,11 @@ import {
   Sun,
   Contrast,
   Maximize2,
-  Grid
+  Grid,
+  Key,
+  Lock,
+  EyeOff,
+  AlertTriangle
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { Post, AdminUser, SplashItem, SiteSettings } from '../types';
@@ -44,7 +48,8 @@ import {
   addAdminUser, 
   removeAdminUser, 
   saveSettings,
-  importBulkSplashes 
+  importBulkSplashes,
+  linkOrUpdateUserPassword 
 } from '../firebase';
 import { playCyberSound } from '../utils/audio';
 import { DedsecSkullIcon } from './DedsecAscii';
@@ -171,6 +176,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [newAdminName, setNewAdminName] = useState('');
   const [adminActionMsg, setAdminActionMsg] = useState('');
   const [isSubmittingAdmin, setIsSubmittingAdmin] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordErrorMsg, setPasswordErrorMsg] = useState('');
+  const [passwordSuccessMsg, setPasswordSuccessMsg] = useState('');
 
   const handleStartEditPost = (p: Post) => {
     setCurrentEditingPost(p);
@@ -582,6 +593,49 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     } catch (err: unknown) {
       console.error(err);
       alert('Erro ao remover admin: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  };
+
+  const handleChangePassword = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setPasswordErrorMsg('');
+    setPasswordSuccessMsg('');
+
+    if (!newPassword || newPassword.length < 6) {
+      setPasswordErrorMsg('A nova senha deve ter no mínimo 6 caracteres.');
+      playCyberSound('deny', soundEnabled);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordErrorMsg('A confirmação da senha não coincide com a nova senha digitada.');
+      playCyberSound('deny', soundEnabled);
+      return;
+    }
+
+    setIsChangingPassword(true);
+    playCyberSound('terminal', soundEnabled);
+
+    try {
+      await linkOrUpdateUserPassword(newPassword);
+      playCyberSound('grant', soundEnabled);
+      setPasswordSuccessMsg('Senha de acesso alterada com sucesso no Firebase!');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setPasswordSuccessMsg(''), 5000);
+    } catch (err: unknown) {
+      console.error(err);
+      playCyberSound('deny', soundEnabled);
+      const fbErr = err as { code?: string; message?: string };
+      if (fbErr?.code === 'auth/requires-recent-login') {
+        setPasswordErrorMsg('Por questões de segurança do Firebase, saia e faça login novamente antes de trocar a senha.');
+      } else if (fbErr?.code === 'auth/weak-password') {
+        setPasswordErrorMsg('A senha informada é fraca. Utilize pelo menos 6 caracteres combinando letras e números.');
+      } else {
+        setPasswordErrorMsg('Erro ao alterar senha: ' + (fbErr?.message || (err instanceof Error ? err.message : String(err))));
+      }
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -2663,6 +2717,102 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   <span>{adminActionMsg}</span>
                 </div>
               )}
+
+              {/* Password Management Section */}
+              <div className="border border-[var(--dedsec-primary)]/60 bg-black/80 p-4 clip-cyber-corner space-y-4 shadow-[0_0_20px_rgba(0,240,255,0.1)]">
+                <div className="flex flex-wrap items-center justify-between border-b border-gray-800 pb-2 gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-[var(--dedsec-primary)]/20 border border-[var(--dedsec-primary)] text-[var(--dedsec-primary)]">
+                      <Key className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-display font-bold text-sm text-white tracking-wider">
+                        ALTERAR SENHA DE ACESSO AO PAINEL
+                      </h3>
+                      <p className="text-[10px] font-mono text-gray-400">
+                        CONTA ATUAL: {user?.email || OWNER_EMAIL}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 bg-[var(--dedsec-primary)]/15 border border-[var(--dedsec-primary)] text-[var(--dedsec-primary)] font-bold">
+                    FIREBASE AUTH
+                  </span>
+                </div>
+
+                <p className="text-xs font-mono text-gray-400 leading-relaxed">
+                  Defina ou altere a senha da sua conta de operador. A nova senha será sincronizada diretamente no Firebase Authentication para acesso seguro por e-mail e senha.
+                </p>
+
+                {passwordErrorMsg && (
+                  <div className="p-2.5 bg-red-950/70 border border-red-600 text-red-300 text-xs font-mono flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                    <span>{passwordErrorMsg}</span>
+                  </div>
+                )}
+
+                {passwordSuccessMsg && (
+                  <div className="p-2.5 bg-green-950/70 border border-green-500 text-green-300 text-xs font-mono flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-400 shrink-0" />
+                    <span>{passwordSuccessMsg}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleChangePassword} className="space-y-3 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-mono text-gray-300 flex items-center gap-1.5">
+                        <Lock className="w-3.5 h-3.5 text-[var(--dedsec-primary)]" />
+                        <span>NOVA SENHA (MÍNIMO 6 CARACTERES) *</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showNewPassword ? 'text' : 'password'}
+                          required
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="Digite a nova senha"
+                          autoComplete="new-password"
+                          className="w-full px-3 py-2 pr-10 bg-black border border-gray-700 text-white font-mono text-xs focus:border-[var(--dedsec-primary)] focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white cursor-pointer"
+                        >
+                          {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-mono text-gray-300 flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-[var(--dedsec-secondary)]" />
+                        <span>CONFIRMAR NOVA SENHA *</span>
+                      </label>
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        required
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Repita a nova senha"
+                        autoComplete="new-password"
+                        className="w-full px-3 py-2 bg-black border border-gray-700 text-white font-mono text-xs focus:border-[var(--dedsec-secondary)] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="submit"
+                      disabled={isChangingPassword}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-[var(--dedsec-primary)] text-black font-display font-bold text-xs hover:bg-cyan-300 transition-colors cursor-pointer disabled:opacity-50 clip-cyber-badge shadow-[0_0_12px_rgba(0,240,255,0.25)]"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>{isChangingPassword ? 'ATUALIZANDO NO FIREBASE...' : 'SALVAR NOVA SENHA NO FIREBASE'}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
 
               {/* Add Admin Form */}
               <form onSubmit={handleAddAdmin} className="border border-gray-800 bg-black/60 p-4 clip-cyber-corner space-y-4">
