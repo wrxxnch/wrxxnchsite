@@ -112,21 +112,18 @@ export default function App() {
   const dailySplash = splashes.find(s => s.type === 'daily') || null;
   const highlightedSplash = splashes.find(s => s.highlighted) || null;
 
-  // Dynamic categories extracted from posts, tags (#wardriving, etc.) and custom categories
+  // Dynamic categories extracted strictly from posts, tags (#wardriving, etc.) and custom categories
   const dynamicCategories = React.useMemo(() => {
     const catSet = new Set<string>();
     
-    // Categorias base padrão
-    ['ctOS Breach', 'Intel Report', 'DedSec Manifesto', 'Zero-Day Exploit', 'San Francisco Telemetry'].forEach(c => catSet.add(c));
-    
-    // Categorias personalizadas salvas nas configurações
+    // Categorias personalizadas salvas nas configurações pelo operador
     if (settings.customCategories && Array.isArray(settings.customCategories)) {
       settings.customCategories.forEach(c => {
         if (c && c.trim()) catSet.add(c.trim());
       });
     }
 
-    // Extrai categorias e tags registradas nos posts dinamicamente
+    // Extrai categorias e tags registradas nos posts reais dinamicamente
     posts.forEach(p => {
       if (p.category && p.category.trim()) {
         catSet.add(p.category.trim());

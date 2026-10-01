@@ -32,8 +32,10 @@ import {
   Key,
   Lock,
   EyeOff,
-  AlertTriangle
+  AlertTriangle,
+  Crop
 } from 'lucide-react';
+import { ImageCropperModal } from './ImageCropperModal';
 import { User } from 'firebase/auth';
 import { Post, AdminUser, SplashItem, SiteSettings } from '../types';
 import { PRESET_WALLPAPERS } from '../data/wallpapers';
@@ -89,9 +91,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
   // Post form state
   const [postTitle, setPostTitle] = useState('');
-  const [postCategory, setPostCategory] = useState('ctOS Breach');
+  const [postCategory, setPostCategory] = useState(settings.customCategories?.[0] || 'Geral');
   const [postContent, setPostContent] = useState('');
-  const [postTags, setPostTags] = useState('DedSec, ctOS, Hacking');
+  const [postTags, setPostTags] = useState('');
   const [postMediaType, setPostMediaType] = useState<'none' | 'image' | 'video'>('none');
   const [postMediaUrl, setPostMediaUrl] = useState('');
   const [postHighlighted, setPostHighlighted] = useState(false);
@@ -100,6 +102,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [postFileName, setPostFileName] = useState('');
   const [isSubmittingPost, setIsSubmittingPost] = useState(false);
   const [postSuccessMsg, setPostSuccessMsg] = useState('');
+
+  // Image Cropper modal state
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [cropperTarget, setCropperTarget] = useState<'logo' | 'post'>('logo');
+  const [cropperImage, setCropperImage] = useState('');
+  const [cropperAspectRatio, setCropperAspectRatio] = useState<'free' | '1:1' | '16:9' | '4:3' | '21:9'>('free');
+  const [cropperTitle, setCropperTitle] = useState('RECORTAR IMAGEM // DEDSEC');
 
   // Categories management state
   const [newCustomCategoryInput, setNewCustomCategoryInput] = useState('');
@@ -169,6 +178,39 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  // Crop handlers for Logo and Posts
+  const handleOpenLogoCropper = () => {
+    if (!tempLogoUrl) return;
+    setCropperTarget('logo');
+    setCropperImage(tempLogoUrl);
+    setCropperAspectRatio('free');
+    setCropperTitle('RECORTAR LOGOTIPO // DEDSEC HUD STUDIO');
+    setCropperOpen(true);
+    playCyberSound('terminal', soundEnabled);
+  };
+
+  const handleOpenPostCropper = () => {
+    if (!postMediaUrl) return;
+    setCropperTarget('post');
+    setCropperImage(postMediaUrl);
+    setCropperAspectRatio('16:9');
+    setCropperTitle('RECORTAR MÍDIA DA TRANSMISSÃO // POST STUDIO');
+    setCropperOpen(true);
+    playCyberSound('terminal', soundEnabled);
+  };
+
+  const handleCropComplete = (croppedDataUrl: string) => {
+    if (cropperTarget === 'logo') {
+      setTempLogoUrl(croppedDataUrl);
+      setLogoFileName('logo-recortado.png');
+    } else {
+      setPostMediaUrl(croppedDataUrl);
+      setPostMediaType('image');
+      setPostFileName('post-recortado.png');
+    }
+    playCyberSound('grant', soundEnabled);
   };
 
   // Admins form state
@@ -377,12 +419,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
   // Dynamic calculation of all categories and tags for display and selection
   const allAvailableCategories = React.useMemo(() => {
-    const map = new Map<string, { count: number; source: 'preset' | 'post' | 'tag' | 'custom' }>();
-    
-    // Presets
-    ['ctOS Breach', 'Intel Report', 'DedSec Manifesto', 'Zero-Day Exploit', 'San Francisco Telemetry', 'Security Analysis'].forEach(c => {
-      map.set(c, { count: 0, source: 'preset' });
-    });
+    const map = new Map<string, { count: number; source: 'post' | 'tag' | 'custom' }>();
 
     // Custom categories from settings
     if (settings.customCategories) {
@@ -420,6 +457,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         });
       }
     });
+
+    if (map.size === 0) {
+      map.set('Geral', { count: 0, source: 'custom' });
+    }
 
     return Array.from(map.entries()).map(([name, info]) => ({
       name,
@@ -876,17 +917,29 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       <span>MÍDIA DA TRANSMISSÃO (IMAGEM OU VÍDEO)</span>
                     </label>
                     {postMediaUrl && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPostMediaUrl('');
-                          setPostMediaType('none');
-                          setPostFileName('');
-                        }}
-                        className="text-[10px] font-mono text-red-400 hover:underline"
-                      >
-                        Limpar mídia selecionada
-                      </button>
+                      <div className="flex items-center gap-2.5">
+                        {postMediaType === 'image' && (
+                          <button
+                            type="button"
+                            onClick={handleOpenPostCropper}
+                            className="flex items-center gap-1 text-[11px] font-mono text-[var(--dedsec-primary)] hover:underline font-bold cursor-pointer"
+                          >
+                            <Crop className="w-3 h-3" />
+                            <span>Recortar Imagem</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPostMediaUrl('');
+                            setPostMediaType('none');
+                            setPostFileName('');
+                          }}
+                          className="text-[10px] font-mono text-red-400 hover:underline cursor-pointer"
+                        >
+                          Limpar mídia selecionada
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -938,6 +991,36 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       />
                     </div>
                   </div>
+
+                  {/* Prévia & Ação Rápida de Recorte (Crop) para Imagem do Post */}
+                  {postMediaType === 'image' && postMediaUrl && (
+                    <div className="p-3 bg-black/90 border border-[var(--dedsec-primary)]/50 clip-cyber-corner flex flex-wrap items-center justify-between gap-3 shadow-[0_0_15px_rgba(0,240,255,0.1)]">
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <img 
+                          src={postMediaUrl} 
+                          alt="Prévia do post" 
+                          className="w-14 h-12 object-cover border border-gray-700 shrink-0" 
+                        />
+                        <div className="min-w-0">
+                          <span className="text-xs font-mono text-white font-bold block truncate">
+                            {postFileName || 'Imagem da Transmissão'}
+                          </span>
+                          <span className="text-[10px] font-mono text-[var(--dedsec-primary)]">
+                            Opção de Crop / Recorte disponível
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleOpenPostCropper}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-[var(--dedsec-primary)] text-black font-display font-bold text-xs hover:bg-cyan-300 transition-all cursor-pointer whitespace-nowrap clip-cyber-badge shadow-[0_0_12px_rgba(0,240,255,0.3)]"
+                      >
+                        <Crop className="w-3.5 h-3.5" />
+                        <span>RECORTAR IMAGEM DO POST</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Opção de Blur na Capa do Post com Texto Customizado */}
@@ -1762,6 +1845,17 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     {tempLogoUrl && (
                       <button
                         type="button"
+                        onClick={handleOpenLogoCropper}
+                        className="text-xs font-mono text-[var(--dedsec-primary)] hover:underline flex items-center gap-1 cursor-pointer font-bold"
+                        title="Recortar a imagem da logo"
+                      >
+                        <Crop className="w-3.5 h-3.5" />
+                        <span>Recortar Logo</span>
+                      </button>
+                    )}
+                    {tempLogoUrl && (
+                      <button
+                        type="button"
                         onClick={() => {
                           setTempLogoUrl('');
                           setLogoFileName('');
@@ -2563,6 +2657,36 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       className="w-full px-3 py-2 bg-black border border-gray-700 text-white font-mono text-xs focus:border-[var(--dedsec-primary)] focus:outline-none"
                     />
                   </div>
+
+                  {/* Ação de Recorte da Logo (Crop Studio) */}
+                  {tempLogoUrl && (
+                    <div className="p-3 bg-black/90 border border-[var(--dedsec-primary)]/50 clip-cyber-corner flex flex-wrap items-center justify-between gap-3 shadow-[0_0_15px_rgba(0,240,255,0.1)]">
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <img 
+                          src={tempLogoUrl} 
+                          alt="Prévia logo" 
+                          className="w-12 h-12 object-contain bg-black/80 border border-gray-700 p-1 shrink-0" 
+                        />
+                        <div className="min-w-0">
+                          <span className="text-xs font-mono text-white font-bold block truncate">
+                            {logoFileName || 'Logotipo Selecionado'}
+                          </span>
+                          <span className="text-[10px] font-mono text-[var(--dedsec-primary)]">
+                            Recorte bordas transparentes ou ajuste o enquadramento
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleOpenLogoCropper}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-[var(--dedsec-primary)] text-black font-display font-bold text-xs hover:bg-cyan-300 transition-all cursor-pointer whitespace-nowrap clip-cyber-badge shadow-[0_0_12px_rgba(0,240,255,0.3)]"
+                      >
+                        <Crop className="w-3.5 h-3.5" />
+                        <span>RECORTAR LOGOTIPO (CROP)</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
 
               </div>
@@ -2952,6 +3076,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         </div>
 
       </div>
+
+      {/* Image Cropper Modal for Logo and Posts */}
+      <ImageCropperModal
+        isOpen={cropperOpen}
+        imageUrl={cropperImage}
+        title={cropperTitle}
+        subtitle={cropperTarget === 'logo' ? 'Ajuste a área de recorte e enquadramento da sua logo' : 'Ajuste o enquadramento (16:9, 1:1, etc.) da imagem da postagem'}
+        initialAspectRatio={cropperAspectRatio}
+        soundEnabled={soundEnabled}
+        onClose={() => setCropperOpen(false)}
+        onCropComplete={handleCropComplete}
+      />
 
     </div>
   );
