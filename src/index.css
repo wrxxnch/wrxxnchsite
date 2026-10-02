@@ -116,3 +116,27 @@
     0 100%
   );
 }
+
+/* Android & Mobile Viewport Adaptation */
+.is-android button,
+.is-mobile button,
+.is-android a,
+.is-mobile a,
+.is-android input,
+.is-mobile input {
+  touch-action: manipulation;
+}
+
+/* Smooth mobile tap highlight elimination */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Safe areas for Android notched displays */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+

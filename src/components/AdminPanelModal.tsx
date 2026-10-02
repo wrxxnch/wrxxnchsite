@@ -33,12 +33,17 @@ import {
   Lock,
   EyeOff,
   AlertTriangle,
-  Crop
+  Crop,
+  Tv,
+  Copy,
+  History
 } from 'lucide-react';
 import { ImageCropperModal } from './ImageCropperModal';
 import { User } from 'firebase/auth';
-import { Post, AdminUser, SplashItem, SiteSettings } from '../types';
+import { Post, AdminUser, SplashItem, SiteSettings, WallpaperHistoryItem } from '../types';
 import { PRESET_WALLPAPERS } from '../data/wallpapers';
+import { DEFAULT_SETTINGS, deleteWallpaperFromCollection } from '../firebase';
+import { optimizeImage } from '../utils/imageOptimizer';
 import { 
   OWNER_EMAIL, 
   createPost, 
@@ -105,7 +110,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
   // Image Cropper modal state
   const [cropperOpen, setCropperOpen] = useState(false);
-  const [cropperTarget, setCropperTarget] = useState<'logo' | 'post'>('logo');
+  const [cropperTarget, setCropperTarget] = useState<'logo' | 'post' | 'wallpaper'>('logo');
   const [cropperImage, setCropperImage] = useState('');
   const [cropperAspectRatio, setCropperAspectRatio] = useState<'free' | '1:1' | '16:9' | '4:3' | '21:9'>('free');
   const [cropperTitle, setCropperTitle] = useState('RECORTAR IMAGEM // DEDSEC');
@@ -143,6 +148,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [tempWallpaperUrl, setTempWallpaperUrl] = useState(settings.wallpaperUrl);
   const [tempWallpaperOpacity, setTempWallpaperOpacity] = useState(settings.wallpaperOpacity);
   const [tempWallpaperBlur, setTempWallpaperBlur] = useState(settings.wallpaperBlur);
+  const [tempWallpaperHistory, setTempWallpaperHistory] = useState<WallpaperHistoryItem[]>(
+    settings.wallpaperHistory && settings.wallpaperHistory.length > 0 
+      ? settings.wallpaperHistory 
+      : (DEFAULT_SETTINGS.wallpaperHistory || [])
+  );
+  const [tempScanlinesEnabled, setTempScanlinesEnabled] = useState<boolean>(settings.enableScanlines ?? false);
+  const [copiedWallpaperId, setCopiedWallpaperId] = useState<string | null>(null);
   const [tempLogoUrl, setTempLogoUrl] = useState(settings.logoUrl || '');
   const [tempLogoHue, setTempLogoHue] = useState(settings.logoHue ?? 0);
   const [tempLogoSaturation, setTempLogoSaturation] = useState(settings.logoSaturation ?? 100);
@@ -166,18 +178,21 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     playCyberSound('click', soundEnabled);
   };
 
-  const handleLogoFileUpload = (file: File) => {
+  const handleLogoFileUpload = async (file: File) => {
     if (!file) return;
     setLogoFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      if (result) {
-        setTempLogoUrl(result);
-        playCyberSound('click', soundEnabled);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const optimized = await optimizeImage(file, {
+        maxWidth: 512,
+        maxHeight: 512,
+        quality: 0.9,
+        format: 'image/png'
+      });
+      setTempLogoUrl(optimized);
+      playCyberSound('click', soundEnabled);
+    } catch (err) {
+      console.warn('Logo file read error:', err);
+    }
   };
 
   // Crop handlers for Logo and Posts
@@ -201,16 +216,61 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     playCyberSound('terminal', soundEnabled);
   };
 
+  const handleOpenWallpaperCropper = () => {
+    if (!tempWallpaperUrl) return;
+    setCropperTarget('wallpaper');
+    setCropperImage(tempWallpaperUrl);
+    setCropperAspectRatio('16:9');
+    setCropperTitle('RECORTAR WALLPAPER // AJUSTE DE RESOLUÇÃO');
+    setCropperOpen(true);
+    playCyberSound('terminal', soundEnabled);
+  };
+
   const handleCropComplete = (croppedDataUrl: string) => {
     if (cropperTarget === 'logo') {
       setTempLogoUrl(croppedDataUrl);
       setLogoFileName('logo-recortado.png');
+    } else if (cropperTarget === 'wallpaper') {
+      setTempWallpaperUrl(croppedDataUrl);
+      setWallpaperFileName('wallpaper-recortado.png');
+      const cropItem: WallpaperHistoryItem = {
+        id: `wp_crop_${Date.now()}`,
+        title: 'Wallpaper Recortado',
+        url: croppedDataUrl,
+        source: 'crop',
+        createdAt: Date.now()
+      };
+      setTempWallpaperHistory(prev => [cropItem, ...prev.filter(w => w.url !== croppedDataUrl)]);
     } else {
       setPostMediaUrl(croppedDataUrl);
       setPostMediaType('image');
       setPostFileName('post-recortado.png');
     }
     playCyberSound('grant', soundEnabled);
+  };
+
+  const handleAddCurrentWallpaperToHistory = () => {
+    if (!tempWallpaperUrl) return;
+    const exists = tempWallpaperHistory.some(w => w.url === tempWallpaperUrl);
+    if (!exists) {
+      const matchingPreset = PRESET_WALLPAPERS.find(p => p.url === tempWallpaperUrl);
+      const newItem: WallpaperHistoryItem = {
+        id: `wp_${Date.now()}`,
+        title: matchingPreset?.title || wallpaperFileName || 'Wallpaper Salvo',
+        url: tempWallpaperUrl,
+        source: matchingPreset ? 'preset' : (tempWallpaperUrl.startsWith('data:') ? 'upload' : 'url'),
+        createdAt: Date.now()
+      };
+      setTempWallpaperHistory(prev => [newItem, ...prev]);
+      playCyberSound('grant', soundEnabled);
+    }
+  };
+
+  const handleDeleteWallpaperFromHistory = (idToRemove: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTempWallpaperHistory(prev => prev.filter(w => w.id !== idToRemove));
+    deleteWallpaperFromCollection(idToRemove);
+    playCyberSound('deny', soundEnabled);
   };
 
   // Admins form state
@@ -364,18 +424,29 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   // Handle Wallpaper File Upload (Image)
-  const handleWallpaperFileUpload = (file: File) => {
+  const handleWallpaperFileUpload = async (file: File) => {
     if (!file) return;
     setWallpaperFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      if (result) {
-        setTempWallpaperUrl(result);
-        playCyberSound('click', soundEnabled);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const optimized = await optimizeImage(file, {
+        maxWidth: 1920,
+        maxHeight: 1080,
+        quality: 0.78,
+        format: 'image/webp'
+      });
+      setTempWallpaperUrl(optimized);
+      const newItem: WallpaperHistoryItem = {
+        id: `wp_upload_${Date.now()}`,
+        title: file.name.replace(/\.[^/.]+$/, "") || 'Wallpaper Carregado',
+        url: optimized,
+        source: 'upload',
+        createdAt: Date.now()
+      };
+      setTempWallpaperHistory(prev => [newItem, ...prev.filter(w => w.url !== optimized)]);
+      playCyberSound('grant', soundEnabled);
+    } catch (err) {
+      console.warn('Wallpaper optimization error:', err);
+    }
   };
 
   // Custom Categories Management
@@ -557,6 +628,30 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const handleSaveCustomization = async () => {
     playCyberSound('grant', soundEnabled);
     try {
+      // Ensure the active wallpaper is saved into the history
+      let finalHistory = [...tempWallpaperHistory];
+      if (tempWallpaperUrl) {
+        const alreadyInHistory = finalHistory.some(w => w.url === tempWallpaperUrl);
+        if (!alreadyInHistory) {
+          const matchingPreset = PRESET_WALLPAPERS.find(p => p.url === tempWallpaperUrl);
+          const newItem: WallpaperHistoryItem = {
+            id: `wp_${Date.now()}`,
+            title: matchingPreset?.title || wallpaperFileName || 'Wallpaper Salvo',
+            url: tempWallpaperUrl,
+            source: matchingPreset ? 'preset' : (tempWallpaperUrl.startsWith('data:') ? 'upload' : 'url'),
+            createdAt: Date.now()
+          };
+          finalHistory = [newItem, ...finalHistory];
+          setTempWallpaperHistory(finalHistory);
+        }
+      }
+
+      try {
+        localStorage.setItem('dedsec_wallpaper_history', JSON.stringify(finalHistory));
+      } catch (e) {
+        console.warn('LocalStorage save error:', e);
+      }
+
       const updates: Partial<SiteSettings> = {
         primaryColor: tempPrimary,
         secondaryColor: tempSecondary,
@@ -565,6 +660,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         wallpaperUrl: tempWallpaperUrl,
         wallpaperOpacity: tempWallpaperOpacity,
         wallpaperBlur: tempWallpaperBlur,
+        wallpaperHistory: finalHistory,
+        enableScanlines: tempScanlinesEnabled,
         logoUrl: tempLogoUrl,
         logoHue: tempLogoHue,
         logoSaturation: tempLogoSaturation,
@@ -1709,11 +1806,136 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 </div>
               )}
 
-              {/* Wallpaper Presets */}
+              {/* HISTÓRICO DE WALLPAPERS SALVOS */}
+              <div className="border border-gray-800 bg-black/60 p-4 clip-cyber-corner space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 pb-2">
+                  <h3 className="font-display font-bold text-sm text-white flex items-center gap-2">
+                    <History className="w-4 h-4 text-[var(--dedsec-primary)]" />
+                    <span>HISTÓRICO DE WALLPAPERS SALVOS</span>
+                    <span className="text-xs px-2 py-0.5 bg-[var(--dedsec-primary)]/20 border border-[var(--dedsec-primary)] text-[var(--dedsec-primary)] font-mono font-bold">
+                      {tempWallpaperHistory.length} SALVOS
+                    </span>
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    {tempWallpaperUrl && !tempWallpaperHistory.some(w => w.url === tempWallpaperUrl) && (
+                      <button
+                        type="button"
+                        onClick={handleAddCurrentWallpaperToHistory}
+                        className="text-xs font-mono text-[var(--dedsec-secondary)] hover:underline flex items-center gap-1 cursor-pointer font-bold"
+                        title="Salvar o wallpaper atual no histórico permanente"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Salvar Atual no Histórico</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const presets = PRESET_WALLPAPERS.map(p => ({
+                          id: p.id,
+                          title: p.title,
+                          url: p.url,
+                          source: 'preset' as const,
+                          createdAt: Date.now()
+                        }));
+                        setTempWallpaperHistory(prev => {
+                          const existingUrls = new Set(prev.map(w => w.url));
+                          const newToAdd = presets.filter(p => !existingUrls.has(p.url));
+                          return [...prev, ...newToAdd];
+                        });
+                        playCyberSound('click', soundEnabled);
+                      }}
+                      className="text-[11px] font-mono text-gray-400 hover:text-gray-200 flex items-center gap-1 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Restaurar Presets</span>
+                    </button>
+                  </div>
+                </div>
+
+                {tempWallpaperHistory.length === 0 ? (
+                  <div className="p-4 border border-dashed border-gray-800 text-center text-xs font-mono text-gray-500">
+                    Nenhum wallpaper no histórico ainda. Carregue um arquivo, insira uma URL ou escolha um preset abaixo para salvar!
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-72 overflow-y-auto pr-1">
+                    {tempWallpaperHistory.map((wp) => {
+                      const isActive = tempWallpaperUrl === wp.url;
+                      return (
+                        <div
+                          key={wp.id}
+                          onClick={() => {
+                            playCyberSound('click', soundEnabled);
+                            setTempWallpaperUrl(wp.url);
+                          }}
+                          className={`group relative aspect-video border cursor-pointer overflow-hidden transition-all ${
+                            isActive
+                              ? 'border-2 border-[var(--dedsec-primary)] shadow-[0_0_15px_rgba(0,240,255,0.4)]'
+                              : 'border-gray-800 hover:border-gray-600 bg-black'
+                          }`}
+                        >
+                          <img
+                            src={wp.url}
+                            alt={wp.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/30 flex flex-col justify-between p-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[8px] font-mono px-1 py-0.2 bg-black/80 text-gray-300 border border-gray-700">
+                                {wp.source === 'upload' ? 'UPLOAD' : wp.source === 'crop' ? 'RECORTADO' : wp.source === 'preset' ? 'PRESET' : 'URL'}
+                              </span>
+                              <div className="flex items-center gap-1 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText(wp.url);
+                                    playCyberSound('terminal', soundEnabled);
+                                    setCopiedWallpaperId(wp.id);
+                                    setTimeout(() => setCopiedWallpaperId(null), 2000);
+                                  }}
+                                  title="Copiar link ou base64 do wallpaper"
+                                  className="p-1 bg-black/90 border border-gray-700 hover:border-white text-gray-300 hover:text-white"
+                                >
+                                  {copiedWallpaperId === wp.id ? (
+                                    <Check className="w-2.5 h-2.5 text-emerald-400" />
+                                  ) : (
+                                    <Copy className="w-2.5 h-2.5" />
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleDeleteWallpaperFromHistory(wp.id, e)}
+                                  title="Remover do histórico de wallpapers"
+                                  className="p-1 bg-black/90 border border-gray-700 hover:border-red-500 text-gray-300 hover:text-red-400"
+                                >
+                                  <Trash2 className="w-2.5 h-2.5" />
+                                </button>
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-mono text-white font-bold truncate block">
+                                {wp.title}
+                              </span>
+                            </div>
+                          </div>
+                          {isActive && (
+                            <div className="absolute top-1 right-1 bg-[var(--dedsec-primary)] text-black px-1 py-0.5 font-mono text-[9px] font-bold">
+                              ATIVO
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Wallpaper Presets Originais */}
               <div className="border border-gray-800 bg-black/60 p-4 clip-cyber-corner space-y-4">
                 <h3 className="font-display font-bold text-sm text-white flex items-center gap-2">
                   <ImageIcon className="w-4 h-4 text-[var(--dedsec-primary)]" />
-                  <span>SELETOR DE WALLPAPER // TEMA WATCH DOGS 2</span>
+                  <span>PRESETS WATCH DOGS 2 // SÃO FRANCISCO</span>
                 </h3>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -1723,6 +1945,20 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       onClick={() => {
                         playCyberSound('click', soundEnabled);
                         setTempWallpaperUrl(wp.url);
+                        // Ensure it's in history
+                        const exists = tempWallpaperHistory.some(w => w.url === wp.url);
+                        if (!exists) {
+                          setTempWallpaperHistory(prev => [
+                            {
+                              id: wp.id,
+                              title: wp.title,
+                              url: wp.url,
+                              source: 'preset',
+                              createdAt: Date.now()
+                            },
+                            ...prev
+                          ]);
+                        }
                       }}
                       className={`group relative aspect-video border cursor-pointer overflow-hidden transition-all ${
                         tempWallpaperUrl === wp.url
@@ -1751,20 +1987,33 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                 {/* Custom Wallpaper Upload or URL */}
                 <div className="space-y-3 pt-2">
-                  <label className="text-xs font-mono text-gray-300 flex items-center gap-1.5">
-                    <Upload className="w-3.5 h-3.5 text-[var(--dedsec-primary)]" />
-                    <span>CARREGAR ARQUIVO DE WALLPAPER OU INSERIR URL</span>
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-mono text-gray-300 flex items-center gap-1.5">
+                      <Upload className="w-3.5 h-3.5 text-[var(--dedsec-primary)]" />
+                      <span>CARREGAR NOVO WALLPAPER (SALVO AUTOMATICAMENTE NO HISTÓRICO)</span>
+                    </label>
+                    {tempWallpaperUrl && (
+                      <button
+                        type="button"
+                        onClick={handleOpenWallpaperCropper}
+                        className="text-xs font-mono text-[var(--dedsec-primary)] hover:underline flex items-center gap-1 cursor-pointer font-bold"
+                        title="Recortar ou ajustar proporção do wallpaper atual"
+                      >
+                        <Crop className="w-3.5 h-3.5" />
+                        <span>Recortar Wallpaper (16:9 / 21:9)</span>
+                      </button>
+                    )}
+                  </div>
 
                   {/* Input de Arquivo (Upload de Imagem para Wallpaper) */}
                   <label className="cursor-pointer block p-3.5 border-2 border-dashed border-gray-700 hover:border-[var(--dedsec-primary)] bg-black/60 text-center transition-all group">
                     <div className="flex flex-col items-center justify-center gap-1.5">
                       <Upload className="w-5 h-5 text-[var(--dedsec-primary)] group-hover:scale-110 transition-transform" />
                       <span className="text-xs font-mono text-white font-bold">
-                        {wallpaperFileName ? `Arquivo Carregado: ${wallpaperFileName}` : 'Clique para Carregar Imagem de Wallpaper do Computador'}
+                        {wallpaperFileName ? `Arquivo Carregado: ${wallpaperFileName}` : 'Clique para Carregar Imagem de Wallpaper do Dispositivo'}
                       </span>
                       <span className="text-[10px] font-mono text-gray-400">
-                        Selecione PNG, JPG, WebP ou GIF do seu dispositivo
+                        PNG, JPG, WebP ou GIF • Ficará permanentemente no seu Histórico de Wallpapers!
                       </span>
                     </div>
                     <input
@@ -1779,7 +2028,17 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   </label>
 
                   <div className="space-y-1">
-                    <label className="text-[11px] font-mono text-gray-400">OU INSIRA UMA URL DIRETA DE IMAGEM</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-mono text-gray-400">OU INSIRA UMA URL DIRETA DE IMAGEM</label>
+                      <button
+                        type="button"
+                        onClick={handleAddCurrentWallpaperToHistory}
+                        className="text-[11px] font-mono text-[var(--dedsec-secondary)] hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Inserir no Histórico</span>
+                      </button>
+                    </div>
                     <input
                       type="url"
                       value={tempWallpaperUrl}
@@ -1823,6 +2082,46 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   </div>
                 </div>
 
+              </div>
+
+              {/* FILTRO DE TELA VHS // SCANLINES CRT & RETRÔ (PADRÃO: DESATIVADO) */}
+              <div className="border border-gray-800 bg-black/60 p-4 clip-cyber-corner space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 pb-2">
+                  <h3 className="font-display font-bold text-sm text-white flex items-center gap-2">
+                    <Tv className="w-4 h-4 text-[var(--dedsec-secondary)]" />
+                    <span>FILTRO DE VÍDEO VHS // SCANLINES CRT & RETRÔ</span>
+                  </h3>
+                  <span className="text-[10px] font-mono px-2 py-0.5 bg-black border border-gray-700 text-gray-300">
+                    PADRÃO: DESATIVADO
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-black/50 border border-gray-800">
+                  <div className="space-y-1">
+                    <span className="text-xs font-mono font-bold text-white block">
+                      Efeito de Linhas de Varredura Analógicas (CRT Scanlines)
+                    </span>
+                    <p className="text-[11px] font-mono text-gray-400 max-w-xl">
+                      Simula o visual de monitor hacker retrô e fita VHS. Por padrão, mantido <strong className="text-gray-200">desativado</strong> para máxima nitidez de leitura no celular e desktop.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playCyberSound('click', soundEnabled);
+                      setTempScanlinesEnabled(!tempScanlinesEnabled);
+                    }}
+                    className={`px-4 py-2 border font-mono text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                      tempScanlinesEnabled
+                        ? 'border-[var(--dedsec-secondary)] bg-[var(--dedsec-secondary)]/20 text-[var(--dedsec-secondary)] shadow-[0_0_12px_rgba(0,255,102,0.3)]'
+                        : 'border-gray-700 bg-black text-gray-400 hover:text-white hover:border-gray-500'
+                    }`}
+                  >
+                    <Tv className="w-4 h-4" />
+                    <span>{tempScanlinesEnabled ? 'FILTRO VHS ATIVADO' : 'FILTRO VHS DESATIVADO (PADRÃO)'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* LOGOTIPO DEDSEC DO SITE (UPLOAD DE ARQUIVO OU URL) COM HSB, LÂMINA E QUADRO */}

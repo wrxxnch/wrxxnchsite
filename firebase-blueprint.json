@@ -1,0 +1,104 @@
+{
+  "entities": {
+    "Admin": {
+      "title": "Admin",
+      "description": "Administrator user authorized to manage DedSec SF Cell",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "description": "Email address of the administrator" },
+        "role": { "type": "string", "description": "Role level (owner, operative)" },
+        "addedAt": { "type": "number", "description": "Timestamp when admin was added" }
+      },
+      "required": ["email", "role"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "DedSec intelligence transmission / post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the post" },
+        "title": { "type": "string", "description": "Headline of the post" },
+        "content": { "type": "string", "description": "Body markdown/text of the post" },
+        "category": { "type": "string", "description": "Category or topic" },
+        "tags": { "type": "array", "description": "List of tags associated with transmission" },
+        "highlighted": { "type": "boolean", "description": "Whether transmission is pinned/highlighted" },
+        "mediaType": { "type": "string", "enum": ["image", "video", "none"], "description": "Media attachment type" },
+        "mediaUrl": { "type": "string", "description": "URL to media attachment" },
+        "asciiArt": { "type": "string", "description": "Optional ASCII art block" },
+        "createdAt": { "type": "number", "description": "Creation timestamp in milliseconds" }
+      },
+      "required": ["id", "title", "content", "category", "createdAt"]
+    },
+    "Splash": {
+      "title": "Splash",
+      "description": "DedSec banner splash / ticker message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the splash" },
+        "text": { "type": "string", "description": "Splash announcement text" },
+        "type": { "type": "string", "enum": ["daily", "common"], "description": "Splash type" },
+        "author": { "type": "string", "description": "Operative author callsign" },
+        "createdAt": { "type": "number", "description": "Creation timestamp in milliseconds" },
+        "mediaType": { "type": "string", "enum": ["image", "video", "none"] },
+        "mediaUrl": { "type": "string" },
+        "asciiArt": { "type": "string" }
+      },
+      "required": ["id", "text", "type", "createdAt"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global visual and system configuration for DedSec network",
+      "type": "object",
+      "properties": {
+        "primaryColor": { "type": "string" },
+        "secondaryColor": { "type": "string" },
+        "accentColor": { "type": "string" },
+        "backgroundColor": { "type": "string" },
+        "activeWallpaperId": { "type": "string" },
+        "wallpaperUrl": { "type": "string" },
+        "wallpaperOpacity": { "type": "number" },
+        "wallpaperBlur": { "type": "number" },
+        "wallpaperHistory": { "type": "array" },
+        "enableScanlines": { "type": "boolean" },
+        "enableGrid": { "type": "boolean" },
+        "enableSound": { "type": "boolean" },
+        "siteTitle": { "type": "string" },
+        "subTitle": { "type": "string" },
+        "tickerRawText": { "type": "string" },
+        "customCategories": { "type": "array" },
+        "logoUrl": { "type": "string" },
+        "logoHue": { "type": "number" },
+        "logoSaturation": { "type": "number" },
+        "logoBrightness": { "type": "number" },
+        "logoInvert": { "type": "boolean" },
+        "logoFrameBg": { "type": "string" },
+        "logoFrameBorderColor": { "type": "string" },
+        "logoFrameGlow": { "type": "boolean" },
+        "logoFrameEnabled": { "type": "boolean" },
+        "logoSize": { "type": "number" }
+      }
+    }
+  },
+  "firestore": {
+    "/admins/{adminEmail}": {
+      "schema": { "$ref": "#/entities/Admin" },
+      "description": "Authorized administrator users"
+    },
+    "/posts/{postId}": {
+      "schema": { "$ref": "#/entities/Post" },
+      "description": "Intel transmissions posted on DedSec board"
+    },
+    "/splashes/{splashId}": {
+      "schema": { "$ref": "#/entities/Splash" },
+      "description": "Splashes and ticker messages"
+    },
+    "/settings/{docId}": {
+      "schema": { "$ref": "#/entities/Settings" },
+      "description": "Visual theme, wallpaper settings, and site configuration"
+    },
+    "/wallpapers/{wallpaperId}": {
+      "schema": { "$ref": "#/entities/Settings" },
+      "description": "Custom wallpapers uploaded by administrators"
+    }
+  }
+}

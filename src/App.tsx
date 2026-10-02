@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { 
   Search, 
@@ -26,6 +26,7 @@ import {
   subscribeSplashes, 
   subscribeAdmins, 
   subscribeSettings,
+  subscribeWallpapers,
   logoutUser, 
   deletePost,
   DEFAULT_SETTINGS
@@ -38,10 +39,18 @@ import { PostModal } from './components/PostModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
 import { LoginModal } from './components/LoginModal';
 import { MediaViewerModal } from './components/MediaViewerModal';
+import { ResolutionTelemetryHud } from './components/ResolutionTelemetryHud';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { DedsecSkullIcon, DedsecBannerText } from './components/DedsecAscii';
 import { playCyberSound } from './utils/audio';
+import { useDeviceResolution } from './hooks/useDeviceResolution';
 
 export default function App() {
+  // Device & Screen Resolution Detection (Android / Mobile)
+  const device = useDeviceResolution();
+  const filterSectionRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+
   // Auth state
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -59,10 +68,10 @@ export default function App() {
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [activeMedia, setActiveMedia] = useState<{ url: string; type: 'image' | 'video'; title?: string } | null>(null);
 
-  // UI & Filters
+  // UI & Filters (Filtro VHS desativado por padrão)
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [scanlinesEnabled, setScanlinesEnabled] = useState<boolean>(true);
+  const [scanlinesEnabled, setScanlinesEnabled] = useState<boolean>(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
   // Listen to Auth state
@@ -86,8 +95,22 @@ export default function App() {
       if (s.secondaryColor) document.documentElement.style.setProperty('--dedsec-secondary', s.secondaryColor);
       if (s.accentColor) document.documentElement.style.setProperty('--dedsec-accent', s.accentColor);
       if (s.backgroundColor) document.documentElement.style.setProperty('--dedsec-bg', s.backgroundColor);
-      setScanlinesEnabled(s.enableScanlines);
-      setSoundEnabled(s.enableSound);
+      setScanlinesEnabled(s.enableScanlines ?? false);
+      setSoundEnabled(s.enableSound ?? true);
+    });
+    const unsubWallpapers = subscribeWallpapers((collectionWallpapers) => {
+      if (collectionWallpapers && collectionWallpapers.length > 0) {
+        setSettings(prev => {
+          const currentHistory = prev.wallpaperHistory || [];
+          const currentUrls = new Set(currentHistory.map(w => w.url));
+          const newItems = collectionWallpapers.filter(w => !currentUrls.has(w.url));
+          if (newItems.length === 0) return prev;
+          return {
+            ...prev,
+            wallpaperHistory: [...newItems, ...currentHistory]
+          };
+        });
+      }
     });
 
     return () => {
@@ -95,6 +118,7 @@ export default function App() {
       unsubSplashes();
       unsubAdmins();
       unsubSettings();
+      unsubWallpapers();
     };
   }, []);
 
@@ -197,7 +221,19 @@ export default function App() {
 
       {/* Main Container */}
       <div className="relative z-10 flex flex-col min-h-screen">
+        <div ref={topRef} />
         
+        {/* HUD Telemetry Bar Strip (Android & Mobile Resolution / Device Detection) */}
+        <ResolutionTelemetryHud
+          device={device}
+          soundEnabled={soundEnabled}
+          scanlinesEnabled={scanlinesEnabled}
+          onToggleSound={() => setSoundEnabled(!soundEnabled)}
+          onToggleScanlines={() => setScanlinesEnabled(!scanlinesEnabled)}
+          onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
+          isAdmin={isAdmin}
+        />
+
         {/* Navigation Bar */}
         <Navbar
           user={user}
@@ -225,7 +261,7 @@ export default function App() {
         />
 
         {/* Hero Banner with DedSec Manifesto */}
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 md:py-8 space-y-6">
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 md:py-8 space-y-6 pb-24 sm:pb-8">
           
           {/* Top Ticker / Header Info */}
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-2 border-b border-[var(--dedsec-border)]">
@@ -271,7 +307,7 @@ export default function App() {
           />
 
           {/* Section 3: Filter & Search Controls */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4 border border-[var(--dedsec-border)] bg-[var(--dedsec-surface)]/60 backdrop-blur-sm">
+          <div ref={filterSectionRef} className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4 border border-[var(--dedsec-border)] bg-[var(--dedsec-surface)]/60 backdrop-blur-sm">
             
             {/* Category Pills */}
             <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
@@ -461,6 +497,28 @@ export default function App() {
       <MediaViewerModal
         media={activeMedia}
         onClose={() => setActiveMedia(null)}
+      />
+
+      {/* Mobile & Android Fixed Quick Navigation Bar */}
+      <MobileBottomNav
+        device={device}
+        soundEnabled={soundEnabled}
+        isAdmin={isAdmin}
+        user={user}
+        onOpenLogin={() => setIsLoginModalOpen(true)}
+        onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
+        onScrollToFilters={() => {
+          filterSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }}
+        onScrollToTop={() => {
+          topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }}
+        onOpenResolutionDetails={() => {
+          // Open HUD inspection dialog
+          const hudBtn = document.querySelector('button[title*="telemetria"]') as HTMLButtonElement;
+          if (hudBtn) hudBtn.click();
+        }}
+        postCount={posts.length}
       />
 
     </div>

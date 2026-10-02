@@ -274,10 +274,22 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
       sourceW = Math.max(10, Math.min(img.naturalWidth - sourceX, sourceW));
       sourceH = Math.max(10, Math.min(img.naturalHeight - sourceY, sourceH));
 
+      // Determine max dimension based on target to prevent exceeding Firestore 1MB document limit
+      const isLogo = title.toLowerCase().includes('logo');
+      const maxTargetWidth = isLogo ? 512 : 1920;
+      const maxTargetHeight = isLogo ? 512 : 1080;
+
+      let targetWidth = Math.round(sourceW);
+      let targetHeight = Math.round(sourceH);
+
+      if (targetWidth > maxTargetWidth || targetHeight > maxTargetHeight) {
+        const ratio = Math.min(maxTargetWidth / targetWidth, maxTargetHeight / targetHeight);
+        targetWidth = Math.max(1, Math.round(targetWidth * ratio));
+        targetHeight = Math.max(1, Math.round(targetHeight * ratio));
+      }
+
       // Create high-res offscreen canvas
       const canvas = document.createElement('canvas');
-      const targetWidth = Math.round(sourceW);
-      const targetHeight = Math.round(sourceH);
       canvas.width = targetWidth;
       canvas.height = targetHeight;
       const ctx = canvas.getContext('2d');
@@ -310,9 +322,13 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
       );
       ctx.restore();
 
-      // Output as clean PNG/JPEG dataURL
-      const outputMime = imageUrl.includes('.png') || imageUrl.includes('svg') ? 'image/png' : 'image/jpeg';
-      const croppedDataUrl = canvas.toDataURL(outputMime, 0.95);
+      // Output as clean compressed WebP (or PNG for logo with transparency)
+      const outputMime = isLogo ? 'image/png' : 'image/webp';
+      const outputQuality = isLogo ? 0.9 : 0.82;
+      let croppedDataUrl = canvas.toDataURL(outputMime, outputQuality);
+      if (croppedDataUrl.startsWith('data:image/png') && !isLogo) {
+        croppedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+      }
 
       playCyberSound('grant', soundEnabled);
       onCropComplete(croppedDataUrl);

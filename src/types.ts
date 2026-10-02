@@ -34,6 +34,14 @@ export interface SplashItem {
   createdAt: number;
 }
 
+export interface WallpaperHistoryItem {
+  id: string;
+  title: string;
+  url: string;
+  source: 'upload' | 'url' | 'preset' | 'crop';
+  createdAt: number;
+}
+
 export interface SiteSettings {
   primaryColor: string;
   secondaryColor: string;
@@ -43,6 +51,7 @@ export interface SiteSettings {
   wallpaperUrl: string;
   wallpaperOpacity: number;
   wallpaperBlur: number;
+  wallpaperHistory?: WallpaperHistoryItem[];
   enableScanlines: boolean;
   enableGrid: boolean;
   enableSound: boolean;

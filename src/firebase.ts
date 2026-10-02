@@ -38,7 +38,8 @@ import {
   getDocs
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
-import { Post, AdminUser, SplashItem, SiteSettings } from './types';
+import { Post, AdminUser, SplashItem, SiteSettings, WallpaperHistoryItem } from './types';
+import { optimizeImage, estimateObjectSize } from './utils/imageOptimizer';
 
 export const OWNER_EMAIL = 'jeanpierreowner@gmail.com';
 
@@ -169,7 +170,30 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   wallpaperUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=2000&auto=format&fit=crop',
   wallpaperOpacity: 25,
   wallpaperBlur: 2,
-  enableScanlines: true,
+  wallpaperHistory: [
+    {
+      id: 'san_francisco_ctos',
+      title: 'San Francisco ctOS 2.0',
+      url: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=2000&auto=format&fit=crop',
+      source: 'preset',
+      createdAt: 1717200000000
+    },
+    {
+      id: 'dedsec_matrix_code',
+      title: 'DedSec Binary Matrix',
+      url: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2000&auto=format&fit=crop',
+      source: 'preset',
+      createdAt: 1717201000000
+    },
+    {
+      id: 'cyber_grid_server',
+      title: 'ctOS Server Core Room',
+      url: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=2000&auto=format&fit=crop',
+      source: 'preset',
+      createdAt: 1717202000000
+    }
+  ],
+  enableScanlines: false, // Padrão do filtro VHS / CRT desativado
   enableGrid: true,
   enableSound: true,
   siteTitle: 'DEDSEC // SF_CELL',
@@ -192,7 +216,15 @@ export const subscribeSettings = (callback: (settings: SiteSettings) => void) =>
   const settingsDoc = doc(db, 'settings', 'site_config');
   return onSnapshot(settingsDoc, (snapshot) => {
     if (snapshot.exists()) {
-      callback({ ...DEFAULT_SETTINGS, ...snapshot.data() } as SiteSettings);
+      const data = snapshot.data();
+      callback({
+        ...DEFAULT_SETTINGS,
+        ...data,
+        enableScanlines: data.enableScanlines ?? false, // Padrão VHS desativado se não especificado
+        wallpaperHistory: Array.isArray(data.wallpaperHistory) && data.wallpaperHistory.length > 0 
+          ? data.wallpaperHistory 
+          : DEFAULT_SETTINGS.wallpaperHistory
+      } as SiteSettings);
     } else {
       callback(DEFAULT_SETTINGS);
     }
@@ -201,9 +233,109 @@ export const subscribeSettings = (callback: (settings: SiteSettings) => void) =>
   });
 };
 
+export const subscribeWallpapers = (callback: (wallpapers: WallpaperHistoryItem[]) => void) => {
+  const q = query(collection(db, 'wallpapers'), orderBy('createdAt', 'desc'));
+  return onSnapshot(q, (snapshot) => {
+    const list: WallpaperHistoryItem[] = [];
+    snapshot.forEach((d) => {
+      list.push({ id: d.id, ...d.data() } as WallpaperHistoryItem);
+    });
+    callback(list);
+  }, (err) => {
+    console.warn('Wallpapers collection subscription warning:', err);
+    callback([]);
+  });
+};
+
+export const saveWallpaperToCollection = async (item: WallpaperHistoryItem): Promise<void> => {
+  try {
+    const wpRef = doc(db, 'wallpapers', item.id);
+    await setDoc(wpRef, item, { merge: true });
+  } catch (err) {
+    console.warn('Error saving to wallpapers collection:', err);
+  }
+};
+
+export const deleteWallpaperFromCollection = async (id: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'wallpapers', id));
+  } catch (err) {
+    console.warn('Error deleting from wallpapers collection:', err);
+  }
+};
+
 export const saveSettings = async (settings: Partial<SiteSettings>): Promise<void> => {
   const settingsDoc = doc(db, 'settings', 'site_config');
-  await setDoc(settingsDoc, settings, { merge: true });
+  
+  // Clone settings object to avoid mutating input state
+  const payload: Partial<SiteSettings> = { ...settings };
+
+  // 1. Optimize wallpaperUrl if it's a data URL
+  if (payload.wallpaperUrl && payload.wallpaperUrl.startsWith('data:image/')) {
+    payload.wallpaperUrl = await optimizeImage(payload.wallpaperUrl, {
+      maxWidth: 1920,
+      maxHeight: 1080,
+      quality: 0.78,
+      format: 'image/webp'
+    });
+  }
+
+  // 2. Optimize logoUrl if it's a data URL
+  if (payload.logoUrl && payload.logoUrl.startsWith('data:image/')) {
+    payload.logoUrl = await optimizeImage(payload.logoUrl, {
+      maxWidth: 512,
+      maxHeight: 512,
+      quality: 0.85,
+      format: 'image/png'
+    });
+  }
+
+  // 3. For wallpaperHistory:
+  // Offload custom uploaded wallpapers into the dedicated /wallpapers/{id} collection
+  if (payload.wallpaperHistory && Array.isArray(payload.wallpaperHistory)) {
+    for (const wp of payload.wallpaperHistory) {
+      if (wp.url && wp.url.startsWith('data:image/')) {
+        saveWallpaperToCollection(wp);
+      }
+    }
+
+    // In settings/site_config document, compress any data URLs to thumbnail size
+    // and keep only the latest 4 entries so site_config NEVER reaches 1MB limit!
+    const optimizedHistory: WallpaperHistoryItem[] = [];
+    for (const wp of payload.wallpaperHistory.slice(0, 4)) {
+      if (wp.url && wp.url.startsWith('data:image/')) {
+        const thumbUrl = await optimizeImage(wp.url, {
+          maxWidth: 640,
+          maxHeight: 360,
+          quality: 0.65,
+          format: 'image/webp'
+        });
+        optimizedHistory.push({ ...wp, url: thumbUrl });
+      } else {
+        optimizedHistory.push(wp);
+      }
+    }
+    payload.wallpaperHistory = optimizedHistory;
+  }
+
+  // 4. Strict Document Size Guard (Firestore max is 1,048,576 bytes)
+  let payloadBytes = estimateObjectSize(payload);
+  if (payloadBytes > 700000) {
+    console.warn(`Payload size (${payloadBytes} bytes) exceeds safety threshold. Trimming wallpaperHistory.`);
+    // Keep only the active wallpaper or 1 item
+    if (payload.wallpaperHistory && payload.wallpaperHistory.length > 1) {
+      payload.wallpaperHistory = payload.wallpaperHistory.slice(0, 1);
+    }
+    payloadBytes = estimateObjectSize(payload);
+  }
+
+  // Final check: if still oversized, omit wallpaperHistory from site_config (it is saved in /wallpapers collection & localStorage)
+  if (payloadBytes > 850000) {
+    console.warn(`Payload still large (${payloadBytes} bytes). Omitting wallpaperHistory from site_config document.`);
+    delete payload.wallpaperHistory;
+  }
+
+  await setDoc(settingsDoc, payload, { merge: true });
 };
 
 // Posts Firestore Realtime
